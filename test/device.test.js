@@ -50,7 +50,7 @@ test('TYPE fields, out-of-range and non-allow-listed addresses are refused witho
   const { device, transport } = make();
   await device.connect();
   const sentBefore = transport.sent.length;
-  for (const addr of [eqAddr(1, 1, 'TYPE'), xoverAddr(1, 2, 'TYPE'), xoverAddr(1, 1, 'F'), DUMP_END + 1, ADDR.M0_MODE, ADDR.compressor(3, 1), ADDR.iir100(1, 1, 'G'), ADDR.switch21(2)]) {
+  for (const addr of [eqAddr(1, 1, 'TYPE'), xoverAddr(1, 2, 'TYPE'), xoverAddr(1, 1, 'F'), DUMP_END + 1, ADDR.M0_MODE, ADDR.compressor(3, 1), ADDR.iir100(1, 1, 'TYPE'), ADDR.switch21(2)]) {
     await assert.rejects(device.writeRegs([{ addr, val: 1 }]), RangeError, `addr ${addr}`);
   }
   assert.equal(transport.sent.length, sentBefore);

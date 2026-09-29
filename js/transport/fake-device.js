@@ -39,6 +39,11 @@ export class FakeDevice {
       }
       r[ADDR.mix11(ch)] = 570;
       r[ADDR.mix41(ch, 1)] = 0;
+      // OEM 10-band layer: the mini program pins bands 1-4 to 60/350/2000/10100 Hz, Q 0.4 stored as 40/QRATE ≈ 12
+      [60, 350, 2000, 10100].forEach((hz, i) => {
+        r[ADDR.iir100(ch, i + 1, 0)] = 1; r[ADDR.iir100(ch, i + 1, 1)] = encodeFreq(hz);
+        r[ADDR.iir100(ch, i + 1, 2)] = 500; r[ADDR.iir100(ch, i + 1, 3)] = 12;
+      });
     }
     r[ADDR.EQ_BYPASS_SWITCH] = 1;
     r[ADDR.M0_MODE] = 1;

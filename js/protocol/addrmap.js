@@ -82,6 +82,7 @@ export function isWritableAddr(addr) {
   if (addr >= 26 && addr <= 57) return (addr - 26) % 4 === 0; // MIX41_k_1
   if (addr >= 73 && addr <= 80) return true;               // DELAY_1..8
   if (addr === ADDR.M0_INPUT_SET) return true;
+  if (addr >= 1252 && addr <= 1571) return (addr - 1252) % 4 !== FIELD.TYPE; // OEM 10-band layer F/G/Q (the OEM app writes these)
   return false;
 }
 

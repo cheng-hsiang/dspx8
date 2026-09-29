@@ -43,7 +43,10 @@ test('isWritableAddr allows only EQ F/G/Q and the listed sound registers', () =>
     assert.equal(a.isWritableAddr(a.ADDR.delay(ch)), true);
   }
   assert.equal(a.isWritableAddr(a.ADDR.M0_INPUT_SET), true);
-  for (const bad of [0, a.ADDR.mute(1), a.ADDR.mute(10), a.ADDR.mix11(9), a.ADDR.mix41(1, 2), a.ADDR.switch21(2), a.ADDR.delay(9), a.ADDR.compressor(3, 0), a.MODE_END, a.ADDR.M0_MODE, a.ADDR.M0_INPUT_CUR, a.ADDR.iir100(1, 1, 'G'), 1572, a.ADDR.USB_L_VOL, a.ADDR.APP_END, 1613, 5000, -1]) {
+  for (const f of ['F', 'G', 'Q']) assert.equal(a.isWritableAddr(a.ADDR.iir100(1, 1, f)), true, `app layer ${f}`);
+  assert.equal(a.isWritableAddr(a.ADDR.iir100(8, 10, 'Q')), true);
+  assert.equal(a.isWritableAddr(a.ADDR.iir100(8, 10, 'TYPE')), false);
+  for (const bad of [0, a.ADDR.mute(1), a.ADDR.mute(10), a.ADDR.mix11(9), a.ADDR.mix41(1, 2), a.ADDR.switch21(2), a.ADDR.delay(9), a.ADDR.compressor(3, 0), a.MODE_END, a.ADDR.M0_MODE, a.ADDR.M0_INPUT_CUR, a.ADDR.iir100(1, 1, 'TYPE'), 1572, a.ADDR.USB_L_VOL, a.ADDR.APP_END, 1613, 5000, -1]) {
     assert.equal(a.isWritableAddr(bad), false, `addr ${bad} should be refused`);
   }
 });
