@@ -96,7 +96,8 @@ export class FakeDevice {
 
   async #emit(resp) {
     for (let i = 0; i < resp.length; i += this.chunkSize) {
-      await sleep(this.latencyMs);
+      // latency 0 → microtask hop only; setTimeout granularity on Windows (~15 ms) would otherwise dominate
+      if (this.latencyMs > 0) await sleep(this.latencyMs); else await Promise.resolve();
       if (!this.connected) return;
       const chunk = resp.slice(i, i + this.chunkSize);
       for (const cb of this.dataCbs) cb(chunk);
