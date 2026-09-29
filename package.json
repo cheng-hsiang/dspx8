@@ -1,0 +1,14 @@
+{
+  "name": "dsp-x8s-web-tuner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DSP-X8s 車用 DSP 網頁調音器（Web Bluetooth PWA）",
+  "scripts": {
+    "test": "node --test test/",
+    "serve": "node tools/serve.mjs",
+    "icons": "node tools/make-icons.mjs",
+    "tables": "node tools/gen-tables.mjs"
+  },
+  "engines": { "node": ">=22" }
+}
