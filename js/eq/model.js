@@ -46,12 +46,21 @@ export function readBands(store, { layer, ch, qScale = 1, slots } = {}) {
   return out;
 }
 
-/** Snap a (f, g, q) request to what the device accepts and encode it. Missing fields are left out. */
+export const FREQ_MIN = TAB_FREQ[0];
+export const FREQ_MAX = TAB_FREQ[TAB_FREQ.length - 1];
+export const Q_MIN = TAB_Q[0];
+export const Q_MAX = TAB_Q[TAB_Q.length - 1];
+
+/**
+ * Encode a (f, g, q) request. Values are clamped to the device tables' range but not snapped to table
+ * entries: the OEM app itself writes 60 Hz, which is absent from TAB_FREQ (59 / 60.1), so the device
+ * accepts arbitrary frequencies. The UI pickers still offer the table values. Missing fields are left out.
+ */
 export function encodeBand({ f, g, q } = {}, qScale = 1) {
   const out = {};
-  if (f !== undefined) out.F = encodeFreq(nearest(TAB_FREQ, f));
+  if (f !== undefined) out.F = encodeFreq(clamp(f, FREQ_MIN, FREQ_MAX));
   if (g !== undefined) out.G = encodeGain(clamp(g, GAIN_MIN_DB, GAIN_MAX_DB));
-  if (q !== undefined) out.Q = Math.round((100 * nearest(TAB_Q, q)) / (qScale ?? 1));
+  if (q !== undefined) out.Q = Math.round((100 * clamp(q, Q_MIN, Q_MAX)) / (qScale ?? 1));
   return out;
 }
 

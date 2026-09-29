@@ -47,8 +47,8 @@ test('inferQScale maps the report verdicts to a scale or null', () => {
   assert.equal(m.inferQScale(s), null);
 });
 
-test('encodeBand snaps to tables, clamps gain, applies qScale', () => {
-  assert.deepEqual(m.encodeBand({ f: 1001, g: 15, q: 1.36 }, 1), { F: 1000, G: 620, Q: 140 });
+test('encodeBand clamps to table range, clamps gain, applies qScale', () => {
+  assert.deepEqual(m.encodeBand({ f: 1001, g: 15, q: 1.36 }, 1), { F: 1001, G: 620, Q: 136 });
   assert.deepEqual(m.encodeBand({ f: 60, g: -3, q: 0.4 }, m.QRATE), { F: encodeFreq(60), G: 470, Q: 13 });
   assert.equal(m.nearest([1, 2, 4, 8], 5), 4);
   assert.equal(m.nearest([1, 2, 4, 8], 100), 8);
@@ -87,7 +87,7 @@ test('presetWritePairs zeroes gains then applies, per group', () => {
   const g50 = r.pairs.filter((p) => p.addr === eqAddr(1, 5, 'G'));
   assert.equal(g50.at(-1).val, 530);
   assert.ok(r.pairs.some((p) => p.addr === eqAddr(1, 5, 'F') && p.val === encodeFreq(50)));
-  assert.ok(r.pairs.some((p) => p.addr === eqAddr(1, 5, 'Q') && p.val === 119));
+  assert.ok(r.pairs.some((p) => p.addr === eqAddr(1, 5, 'Q') && p.val === 120));
   assert.ok(r.pairs.some((p) => p.addr === eqAddr(2, 5, 'G') && p.val === 530));
   assert.ok(r.pairs.some((p) => p.addr === eqAddr(3, 1, 'G') && p.val === 500));
   assert.equal(r.dropped.length, 0);
