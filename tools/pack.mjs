@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = `${ROOT}dist/`;
-const ITEMS = ['index.html', 'manifest.webmanifest', 'sw.js', 'css', 'js', 'icons'];
+const ITEMS = ['index.html', 'manifest.webmanifest', 'sw.js', 'css', 'js', 'icons', 'presets'];
 
 await rm(DIST, { recursive: true, force: true });
 await mkdir(DIST, { recursive: true });

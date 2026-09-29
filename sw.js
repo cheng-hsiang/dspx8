@@ -1,9 +1,11 @@
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const CACHE = `dspx8s-${VERSION}`;
 const PRECACHE = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './icons/icon-192.png', './icons/icon-512.png',
-  './js/ui/app.js', './js/ui/statusbar.js', './js/ui/components/dialog.js', './js/ui/components/regtable.js',
+  './js/ui/app.js', './js/ui/statusbar.js', './js/ui/components/dialog.js', './js/ui/components/regtable.js', './js/ui/components/curve.js',
+  './js/eq/biquad.js', './js/eq/model.js', './js/eq/presets.js',
+  './presets/index.json', './presets/01-reference.json', './presets/02-kpop-jpop.json', './presets/03-mandarin-vocal.json', './presets/04-chill-rnb.json',
   './js/ui/pages/bluetooth.js', './js/ui/pages/sound.js', './js/ui/pages/eq.js', './js/ui/pages/modes.js', './js/ui/pages/log.js',
   './js/core/logger.js', './js/core/store.js', './js/core/queue.js', './js/core/device.js', './js/core/report.js', './js/core/storage.js',
   './js/transport/transport.js', './js/transport/ble.js', './js/transport/fake-device.js',
