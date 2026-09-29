@@ -5,7 +5,7 @@
   "type": "module",
   "description": "DSP-X8s 車用 DSP 網頁調音器（Web Bluetooth PWA）",
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test",
     "serve": "node tools/serve.mjs",
     "smoke": "node tools/smoke.mjs",
     "icons": "node tools/make-icons.mjs",
