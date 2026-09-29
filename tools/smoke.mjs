@@ -114,6 +114,34 @@ const SCRIPT_B = `(async () => {
   return out;
 })()`;
 
+const SCRIPT_C = `(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (fn, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (fn()) return true; await sleep(50); } return false; };
+  const out = {};
+  out.slowBooted = await until(() => window.dspx && document.querySelector('#bt-connect'));
+  document.querySelector('#bt-connect').click();
+  out.slowDump = await until(() => (document.querySelector('#bt-progress-text').textContent || '').startsWith('完成'), 60000);
+  document.querySelector('[data-tab="eq"]').click();
+  await until(() => window.dspx.eq && window.dspx.eq.state.bundled.length === 4, 8000);
+  const { eqAddr } = await import('./js/protocol/addrmap.js');
+  const canvas = document.querySelector('#eq-curve');
+  const r = canvas.getBoundingClientRect();
+  const pt = window.dspx.eq.pointOf(9); // band 10 (160 Hz)
+  const ev = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type, { clientX: r.left + x, clientY: r.top + y, pointerId: 7, isPrimary: true, bubbles: true, cancelable: true }));
+  ev('pointerdown', pt.x, pt.y);
+  for (let i = 1; i <= 12; i++) { ev('pointermove', pt.x + (i % 3), pt.y + i * 5); await sleep(30); } // mostly vertical → gain only
+  ev('pointerup', pt.x, pt.y + 60);
+  out.slowIdle = await until(() => window.dspx.eq.idle() && window.dspx.store.getStatus(eqAddr(1, 10, 'G')) === 1, 20000);
+  const gFinal = window.dspx.store.get(eqAddr(1, 10, 'G'));
+  const fFinal = window.dspx.store.get(eqAddr(1, 10, 'F'));
+  out.slowGainLowered = gFinal < 480 && gFinal === window.dspx.store.get(eqAddr(2, 10, 'G'));
+  out.slowFreqUnchanged = fFinal === (160 | 0) ;
+  let mism = 0; for (let a = 138; a < 1226; a++) if (window.dspx.store.getStatus(a) === 3) mism++;
+  out.slowMismatches = mism;
+  out.slowUiMatchesStore = Math.abs(Number(document.querySelector('#eq-gain').value) - (gFinal - 500) / 10) < 0.05;
+  return out;
+})()`;
+
 try {
   await sleep(500);
   await waitForCdp();
@@ -132,7 +160,11 @@ try {
     await writeFile(join(ROOT, '.smoke', 'eq.png'), Buffer.from(shot.data, 'base64'));
   } catch (err) { console.warn('screenshot failed', err.message); }
   const resultB = await cdp.evaluate(SCRIPT_B);
-  const result = { ...resultA, ...resultB };
+  // slow-link scenario: real pointer drag on the curve with 150 ms per BLE chunk; no false mismatch, final value = last drag
+  await cdp.send('Page.navigate', { url: `http://localhost:${PORT}/?sim=1&lat=150` });
+  await sleep(1500);
+  const resultC = await cdp.evaluate(SCRIPT_C);
+  const result = { ...resultA, ...resultB, ...resultC };
   const errors = cdp.events.filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error'))
     .map((e) => e.method === 'Runtime.exceptionThrown' ? e.params.exceptionDetails.exception?.description ?? e.params.exceptionDetails.text : e.params.args.map((a) => a.value ?? a.description).join(' '));
   const checks = {
@@ -144,6 +176,8 @@ try {
     eqCanvas: result.eqCanvas, eqPresetsLoaded: result.eqPresetsLoaded, eqPresetApplied: result.eqPresetApplied,
     eqFrontWritten: result.eqBandCh1 === 530 && result.eqBandCh2 === 530, eqRearUntouched: result.eqBandCh3Zero === 500,
     eqNudged: result.eqNudged, eqNoMismatch: result.eqMismatches === 0, eqDisabledWhenOffline: result.eqDisabledWhenOffline,
+    slowDump: result.slowDump, slowIdle: result.slowIdle, slowGainLowered: result.slowGainLowered, slowFreqUnchanged: result.slowFreqUnchanged,
+    slowNoMismatch: result.slowMismatches === 0, slowUiMatchesStore: result.slowUiMatchesStore,
   };
   console.log(JSON.stringify({ result, errors, checks }, null, 1));
   const failed = Object.entries(checks).filter(([, v]) => !v).map(([k]) => k);

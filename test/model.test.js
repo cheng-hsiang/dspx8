@@ -37,6 +37,25 @@ test('readBands decodes and flags disabled slots', () => {
   assert.ok(Math.abs(app[0].q - 0.38) < 0.01);
 });
 
+test('effectiveQScale: OEM layer is always QRATE unless forced to 1; mode layer follows inference with fallback 1', () => {
+  assert.equal(m.effectiveQScale(m.LAYERS.APP, 'auto', null), m.QRATE);
+  assert.equal(m.effectiveQScale(m.LAYERS.APP, 'auto', 1), m.QRATE);
+  assert.equal(m.effectiveQScale(m.LAYERS.APP, 'qrate', 1), m.QRATE);
+  assert.equal(m.effectiveQScale(m.LAYERS.APP, '1', null), 1);
+  assert.equal(m.effectiveQScale(m.LAYERS.MODE, 'auto', null), 1);
+  assert.equal(m.effectiveQScale(m.LAYERS.MODE, 'auto', m.QRATE), m.QRATE);
+  assert.equal(m.effectiveQScale(m.LAYERS.MODE, 'qrate', null), m.QRATE);
+  assert.equal(m.effectiveQScale(m.LAYERS.MODE, '1', m.QRATE), 1);
+});
+
+test('describeQScale labels the three states', () => {
+  assert.equal(m.describeQScale(m.LAYERS.APP, 'auto', null), '原廠層 ×3.17（已知）');
+  assert.equal(m.describeQScale(m.LAYERS.MODE, 'auto', null), '自動：未確認，暫用 1');
+  assert.equal(m.describeQScale(m.LAYERS.MODE, 'auto', 1), '自動：1');
+  assert.equal(m.describeQScale(m.LAYERS.MODE, 'auto', m.QRATE), '自動：×3.17');
+  assert.equal(m.describeQScale(m.LAYERS.MODE, 'qrate', null), '手動：×3.17');
+});
+
 test('inferQScale maps the report verdicts to a scale or null', () => {
   const s = seeded();
   for (let ch = 1; ch <= 8; ch++) s.set(eqAddr(ch, 1, 'Q'), 100);

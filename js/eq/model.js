@@ -24,6 +24,25 @@ export function inferQScale(store) {
   return verdict === 'no-qrate' ? 1 : verdict === 'qrate' ? QRATE : null;
 }
 
+/**
+ * The Q divisor actually used for reads/writes. The OEM layer is known to use QRATE (the mini program
+ * divides by it), so only an explicit '1' overrides it there. The 31-band layer follows the dump inference
+ * (cached by the caller once per dump) and falls back to 1 when it could not be inferred.
+ */
+export function effectiveQScale(layer, qMode, inferred) {
+  if (layer === LAYERS.APP) return qMode === '1' ? 1 : QRATE;
+  if (qMode === '1') return 1;
+  if (qMode === 'qrate') return QRATE;
+  return inferred ?? 1;
+}
+
+export function describeQScale(layer, qMode, inferred) {
+  if (layer === LAYERS.APP && qMode !== '1') return '原廠層 ×3.17（已知）';
+  if (qMode === '1') return '手動：1';
+  if (qMode === 'qrate') return '手動：×3.17';
+  return inferred === null || inferred === undefined ? '自動：未確認，暫用 1' : inferred === 1 ? '自動：1' : '自動：×3.17';
+}
+
 export function nearest(table, v) {
   let best = table[0];
   for (const t of table) if (Math.abs(t - v) < Math.abs(best - v)) best = t;
