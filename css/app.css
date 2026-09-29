@@ -1,0 +1,35 @@
+:root { --bg: #101418; --panel: #1a2027; --line: #2b343e; --fg: #e6edf3; --muted: #8b98a5; --accent: #29b6f6; --ok: #4caf50; --warn: #ffb300; --err: #ef5350; --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", sans-serif; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px/1.45 var(--font); }
+body { display: flex; flex-direction: column; min-height: 100dvh; }
+.statusbar { position: sticky; top: 0; z-index: 2; display: flex; gap: 12px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; padding-top: calc(10px + env(safe-area-inset-top)); }
+.statusbar .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.statusbar .dot.connected { background: var(--ok); } .statusbar .dot.readonly { background: var(--warn); } .statusbar .dot.connecting { background: var(--accent); }
+main { flex: 1; padding: 16px; padding-bottom: 96px; max-width: 900px; width: 100%; margin: 0 auto; }
+.page h2 { margin: 0 0 12px; font-size: 18px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+.card h3 { margin: 0 0 10px; font-size: 15px; color: var(--muted); font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.row.between { justify-content: space-between; }
+button, select, input[type="number"], input[type="search"] { font: inherit; color: var(--fg); background: #232c36; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; min-height: 44px; }
+button { cursor: pointer; } button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); color: #04121a; border-color: transparent; font-weight: 600; }
+button.danger { background: var(--err); color: #fff; border-color: transparent; }
+input[type="range"] { width: 100%; min-height: 44px; }
+.muted { color: var(--muted); } .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
+.mono { font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 12.5px; }
+progress { width: 100%; height: 10px; }
+.tabs { position: fixed; bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.tabs button { border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 12px 0; min-height: 56px; }
+.tabs button.active { color: var(--accent); font-weight: 600; }
+.toast { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); background: #000c; color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 5; max-width: 90vw; }
+dialog { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 12px; max-width: 90vw; }
+dialog::backdrop { background: #0009; } dialog menu { display: flex; gap: 10px; justify-content: flex-end; padding: 0; margin: 12px 0 0; }
+table.regs { width: 100%; border-collapse: collapse; } table.regs td, table.regs th { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+tr.status-2 td { color: var(--accent); } tr.status-3 td { color: var(--err); } tr.status-0 td { color: var(--muted); }
+.log { height: 60vh; overflow: auto; background: #0b0f13; border: 1px solid var(--line); border-radius: 10px; padding: 8px; white-space: pre; }
+.log .l-WARN { color: var(--warn); } .log .l-ERR { color: var(--err); } .log .l-TX { color: #7fd1ff; } .log .l-RX { color: #b5f5a8; } .log .l-REPORT { color: #ffd54f; }
+.banner { background: #263238; border: 1px solid var(--accent); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+.banner.warn { border-color: var(--warn); }
+.modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .modes button.active { outline: 2px solid var(--accent); }
+textarea.copyfallback { width: 100%; height: 40vh; font-family: ui-monospace, monospace; font-size: 12px; background: #0b0f13; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; }
