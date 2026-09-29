@@ -11,8 +11,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** In-memory DSP-X8s stand-in implementing the Transport interface. */
 export class FakeDevice {
-  constructor({ latencyMs = 2, chunkSize = 20, customerId = 4006, failSect = false, dropNext = 0, name = 'DSP-X8s-SIM' } = {}) {
-    Object.assign(this, { latencyMs, chunkSize, customerId, failSect, dropNext, name });
+  constructor({ latencyMs = 2, chunkSize = 20, customerId = 4006, failSect = false, dropNext = 0, sectLimit = 100, omitReadAddrs = [], name = 'DSP-X8s-SIM' } = {}) {
+    Object.assign(this, { latencyMs, chunkSize, customerId, failSect, dropNext, sectLimit, name });
+    this.omitReadAddrs = new Set(omitReadAddrs); // addresses silently left out of READ replies (test hook)
     this.connected = false;
     this.regs = new Uint16Array(REG_COUNT);
     this.slots = Array.from({ length: 8 }, () => new Uint16Array(MODE_END));
@@ -75,7 +76,11 @@ export class FakeDevice {
       case CMD.CHECK_ID: return buildFrame(cmd, [hi(this.customerId), lo(this.customerId)]);
       case CMD.READ: {
         const out = [];
-        for (let i = 0; i + 1 < data.length; i += 2) { const a = (data[i] << 8) | data[i + 1]; out.push(data[i], data[i + 1], hi(this.regs[a] ?? 0), lo(this.regs[a] ?? 0)); }
+        for (let i = 0; i + 1 < data.length; i += 2) {
+          const a = (data[i] << 8) | data[i + 1];
+          if (this.omitReadAddrs.has(a)) continue;
+          out.push(data[i], data[i + 1], hi(this.regs[a] ?? 0), lo(this.regs[a] ?? 0));
+        }
         return buildFrame(cmd, out);
       }
       case CMD.WRITE:
@@ -85,7 +90,7 @@ export class FakeDevice {
         if (this.failSect) return null;
         const start = (data[0] << 8) | data[1];
         const out = [data[0], data[1]];
-        for (let a = start; a < Math.min(start + 100, REG_COUNT); a++) out.push(hi(this.regs[a]), lo(this.regs[a]));
+        for (let a = start; a < Math.min(start + Math.min(100, this.sectLimit), REG_COUNT); a++) out.push(hi(this.regs[a]), lo(this.regs[a]));
         return buildFrame(cmd, out);
       }
       case CMD.CALL_MODE: { const n = data[0]; if (n >= 1 && n <= 8) this.pokeMode(n); return buildFrame(cmd, [n]); }

@@ -73,7 +73,7 @@ export function init(ctx, el) {
   $('#bt-redump').addEventListener('click', async (e) => { e.target.disabled = true; try { await device.dump(); } catch (err) { toast(err.message); } finally { renderState(); } });
 
   $('#bt-export').addEventListener('click', () => {
-    const payload = { exportedAt: new Date().toISOString(), device: device.info, dumpInfo: device.dumpInfo, mode: store.get(ADDR.M0_MODE), values: Array.from(store.values) };
+    const payload = { exportedAt: new Date().toISOString(), device: device.info, dumpInfo: device.dumpInfo, mode: store.get(ADDR.M0_MODE), values: Array.from(store.values), status: Array.from(store.status) };
     download(`dspx8s-${new Date().toISOString().replace(/[:.]/g, '-')}.json`, JSON.stringify(payload, null, 1));
   });
 

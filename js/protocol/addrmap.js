@@ -65,6 +65,26 @@ export function isTypeAddr(addr) {
   return (addr - CH_BASE) % 4 === 0;
 }
 
+/**
+ * Allow-list of registers this app may write (spec §2, §7.2, §7.3): EQ F/G/Q of the 8 channels,
+ * per-channel mute (MUTE_2..9), per-channel level (MIX11_1..8), phase carrier (MIX41_k_1),
+ * delay 1..8 and the input-source selector. Everything else — TYPE fields, crossovers, compressors,
+ * switches, mode/state registers, the IIR100 quick-EQ layer, input volumes — is refused.
+ */
+export function isWritableAddr(addr) {
+  if (!Number.isInteger(addr)) return false;
+  if (addr >= CH_BASE && addr < MODE_END) {
+    const off = (addr - CH_BASE) % CH_STRIDE;
+    return off >= XOVER_SLOTS * 4 && off % 4 !== FIELD.TYPE;
+  }
+  if (addr >= 2 && addr <= 9) return true;                 // MUTE_2..MUTE_9 (CH1..CH8)
+  if (addr >= 12 && addr <= 19) return true;               // MIX11_1..8
+  if (addr >= 26 && addr <= 57) return (addr - 26) % 4 === 0; // MIX41_k_1
+  if (addr >= 73 && addr <= 80) return true;               // DELAY_1..8
+  if (addr === ADDR.M0_INPUT_SET) return true;
+  return false;
+}
+
 export function describeAddr(addr) {
   if (addr === 0) return 'MACHINE_TYPE';
   if (addr <= 11) return `MUTE_${addr}`;

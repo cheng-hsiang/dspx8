@@ -65,10 +65,12 @@ test('matchesRequest: write needs exact echo, read/sect match first address, mod
   assert.equal(cmd.matchesRequest(cmd.callModePacket(2), buildFrame(0x11, [2])), false);
 });
 
-test('coalesceKey identifies same-address writes and reads, null for others', () => {
-  assert.equal(cmd.coalesceKey(cmd.writePacket([{ addr: 156, val: 1 }])), '3:156:9');
-  assert.equal(cmd.coalesceKey(cmd.writePacket([{ addr: 156, val: 2 }])), '3:156:9');
-  assert.equal(cmd.coalesceKey(cmd.readPacket([1248, 1242, 1588])), '6:1248:11');
+test('coalesceKey identifies same-address-set writes and reads, null for others', () => {
+  assert.equal(cmd.coalesceKey(cmd.writePacket([{ addr: 156, val: 1 }])), '3:156');
+  assert.equal(cmd.coalesceKey(cmd.writePacket([{ addr: 156, val: 2 }])), '3:156');
+  assert.equal(cmd.coalesceKey(cmd.writePacket([{ addr: 156, val: 1 }, { addr: 160, val: 1 }])), '3:156,160');
+  assert.equal(cmd.coalesceKey(cmd.readPacket([1248, 1242, 1588])), '6:1248,1242,1588');
+  assert.notEqual(cmd.coalesceKey(cmd.readPacket([1248, 1242, 1588])), cmd.coalesceKey(cmd.readPacket([1248, 1, 2])));
   assert.equal(cmd.coalesceKey(cmd.checkIdPacket()), null);
   assert.equal(cmd.coalesceKey(cmd.uploadSectPacket(0)), null);
 });

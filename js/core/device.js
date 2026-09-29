@@ -1,7 +1,7 @@
 import { Queue, TimeoutError } from './queue.js';
 import { STATUS } from './store.js';
 import * as cmd from '../protocol/commands.js';
-import { ADDR, DUMP_END, HEARTBEAT_ADDRS, isTypeAddr, eqAddr, describeAddr } from '../protocol/addrmap.js';
+import { ADDR, DUMP_END, HEARTBEAT_ADDRS, isTypeAddr, isWritableAddr, eqAddr, describeAddr } from '../protocol/addrmap.js';
 import { encodeGain } from '../protocol/codec.js';
 import { CUSTOMER_ID } from '../protocol/tables.js';
 
@@ -63,7 +63,7 @@ export class Device {
   async disconnect() {
     this.stopHeartbeat();
     if (this.queue) { this.queue.clear(new Error('disconnected')); this.queue = null; }
-    if (this.transport.connected) { try { await this.transport.disconnect(); } catch { /* ignore */ } }
+    try { await this.transport.disconnect(); } catch { /* transports are idempotent; a half-open GATT link must still be released */ }
     if (this.state !== STATE.DISCONNECTED) { this.log.info('已斷線'); this.#setState(STATE.DISCONNECTED); }
   }
 
@@ -94,6 +94,12 @@ export class Device {
         const res = await q.send(cmd.uploadSectPacket(start));
         const pairs = res.parsed.values.slice(0, end - start + 1).map((val, i) => ({ addr: start + i, val }));
         this.store.setMany(pairs, STATUS.CONFIRMED);
+        if (pairs.length < end - start + 1) {
+          // short response: never call the dump complete on registers we did not receive
+          this.log.warn(`區段 ${start} 只回 ${pairs.length} 個值，補讀 ${start + pairs.length}..${end}`);
+          const ok = await this.#readRange(start + pairs.length, end);
+          if (ok) info.method = 'mixed'; else { info.complete = false; info.failedSegments.push(start); }
+        }
       } catch (err) {
         if (!(err instanceof TimeoutError)) throw err;
         this.log.warn(`區段 ${start} 無回應，改用一般讀取`);
@@ -133,6 +139,7 @@ export class Device {
     for (const { addr, val } of pairs) {
       if (!Number.isInteger(addr) || addr < 0 || addr > DUMP_END) throw new RangeError(`address out of range: ${addr}`);
       if (isTypeAddr(addr)) throw new RangeError(`refusing to write TYPE field ${describeAddr(addr)}`);
+      if (!isWritableAddr(addr)) throw new RangeError(`refusing to write non-allow-listed register ${describeAddr(addr)}`);
       if (!Number.isInteger(val) || val < 0 || val > 0xFFFF) throw new RangeError(`value out of range: ${val}`);
     }
     const q = this.#requireQueue();
@@ -147,14 +154,23 @@ export class Device {
     const expected = new Map(addrs.map((a) => [a, this.store.get(a)]));
     const q = this.#requireQueue();
     const mismatches = [];
+    const seen = new Set();
     for (const pkt of cmd.readPackets(addrs)) {
       const res = await q.send(pkt);
       for (const { addr, val } of res.parsed.pairs) {
+        if (!expected.has(addr)) continue;
+        seen.add(addr);
         if (val === expected.get(addr)) this.store.set(addr, val, STATUS.CONFIRMED);
         else { mismatches.push({ addr, expected: expected.get(addr), actual: val }); this.store.markMismatch(addr, val); }
       }
     }
-    if (mismatches.length) this.log.warn(`讀回不符 ${mismatches.length} 筆：` + mismatches.map((m) => `${describeAddr(m.addr)} 期望 ${m.expected} 實際 ${m.actual}`).join('；'));
+    for (const addr of addrs) {
+      if (seen.has(addr)) continue;
+      // the device answered but left this address out: that is not a confirmation
+      mismatches.push({ addr, expected: expected.get(addr), actual: null });
+      this.store.markMismatch(addr, null);
+    }
+    if (mismatches.length) this.log.warn(`讀回不符 ${mismatches.length} 筆：` + mismatches.map((m) => `${describeAddr(m.addr)} 期望 ${m.expected} 實際 ${m.actual ?? '無回應'}`).join('；'));
     return mismatches;
   }
 
@@ -174,7 +190,7 @@ export class Device {
     const { mismatches, ms } = await this.writeAndVerify([{ addr, val: sent }]);
     const readBack = mismatches.length ? mismatches[0].actual : sent;
     const ok = mismatches.length === 0;
-    this.log[ok ? 'info' : 'warn'](`寫入測試${ok ? '成功' : '失敗'}：讀回 ${readBack}，${ms} ms`);
+    this.log[ok ? 'info' : 'warn'](`寫入測試${ok ? '成功' : '失敗'}：讀回 ${readBack ?? '無回應'}，${ms} ms`);
     return { addr, name, before, sent, readBack, ok, ms };
   }
 

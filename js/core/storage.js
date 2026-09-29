@@ -53,16 +53,28 @@ export class LogPersister {
   }
   async stop() { if (this.unsub) this.unsub(); if (this.timer) clearInterval(this.timer); this.unsub = null; this.timer = null; await this.flush(); }
   flush() {
-    if (this.flushing) return this.flushing;
+    if (this.flushing) { this.dirty = true; return this.flushing; } // entries logged mid-flush are written by the follow-up flush
     this.unsent = 0;
+    this.dirty = false;
     const entries = this.logger.entries.slice();
     this.flushing = (async () => {
       try {
         await this.storage.put('logs', 'last', entries);
         await this.storage.put('logs', 'meta', { savedAt: Date.now(), count: entries.length });
-      } catch { /* persistence is best-effort */ } finally { this.flushing = null; }
+      } catch { /* persistence is best-effort */ } finally {
+        this.flushing = null;
+        if (this.dirty) await this.flush();
+      }
     })();
     return this.flushing;
   }
   static async loadLast(storage) { const e = await storage.get('logs', 'last'); return Array.isArray(e) && e.length ? e : null; }
+  /** Call once at boot, before start(): preserves the previous session's log under 'prev' so this session cannot overwrite it. */
+  static async rotate(storage) {
+    try {
+      const last = await storage.get('logs', 'last');
+      if (Array.isArray(last) && last.length) { await storage.put('logs', 'prev', last); await storage.put('logs', 'prevMeta', await storage.get('logs', 'meta')); }
+    } catch { /* best-effort */ }
+  }
+  static async loadPrevious(storage) { const e = await storage.get('logs', 'prev'); return Array.isArray(e) && e.length ? e : null; }
 }

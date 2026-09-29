@@ -90,6 +90,46 @@ test('unsolicited frames are reported and do not ack the in-flight request', asy
   assert.equal(q.stats.unsolicited, 1);
 });
 
+function slowTransport({ writeMs, failWrites = 0 }) {
+  const t = { connected: true, name: 'slow', writeCalls: 0, inFlightWrites: 0, maxOverlap: 0, dataCbs: [] };
+  t.onData = (cb) => t.dataCbs.push(cb);
+  t.onDisconnect = () => {};
+  t.connect = async () => ({ name: 'slow' });
+  t.disconnect = async () => {};
+  t.write = () => new Promise((resolve, reject) => {
+    t.writeCalls++; t.inFlightWrites++; t.maxOverlap = Math.max(t.maxOverlap, t.inFlightWrites);
+    setTimeout(() => { t.inFlightWrites--; if (failWrites > 0) { failWrites--; reject(new Error('GATT operation already in progress')); } else resolve(); }, writeMs);
+  });
+  return t;
+}
+
+test('a timeout while the write is still pending does not start an overlapping write', async () => {
+  const t = slowTransport({ writeMs: 70 });
+  const q = new Queue(t, new Logger(), { timeoutMs: 30, retries: 1, deadAfter: 5 });
+  await assert.rejects(q.send(cmd.checkIdPacket()), TimeoutError);
+  assert.equal(t.maxOverlap, 1, 'writes overlapped');
+  assert.equal(t.writeCalls, 2, 'expected one resend after the slow write settled');
+});
+
+test('a response that arrives after the timer but before the write settles is accepted', async () => {
+  const t = slowTransport({ writeMs: 60 });
+  const q = new Queue(t, new Logger(), { timeoutMs: 20, retries: 1, deadAfter: 5 });
+  const p = q.send(cmd.checkIdPacket());
+  setTimeout(() => { for (const cb of t.dataCbs) cb(buildFrame(0x00, [0x0F, 0xA6])); }, 40);
+  const res = await p;
+  assert.equal(res.parsed.id, 4006);
+  assert.equal(t.writeCalls, 1);
+});
+
+test('write errors count toward dead detection', async () => {
+  const t = slowTransport({ writeMs: 1, failWrites: 3 });
+  const q = new Queue(t, new Logger(), { timeoutMs: 30, retries: 0, deadAfter: 2 });
+  let dead = 0; q.onDead(() => dead++);
+  await assert.rejects(q.send(cmd.checkIdPacket()), /GATT/);
+  await assert.rejects(q.send(cmd.checkIdPacket()), /GATT/);
+  assert.equal(dead, 1);
+});
+
 test('clear rejects everything pending and in flight', async () => {
   const { q } = await setup({ failSect: true });
   const p1 = q.send(cmd.uploadSectPacket(0));

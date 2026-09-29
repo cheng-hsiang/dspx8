@@ -36,3 +36,24 @@ test('LogPersister flushes on batch size, on interval, and on stop; loadLast res
   const meta = await s.get('logs', 'meta');
   assert.equal(meta.count, 5);
 });
+
+test('rotate keeps the previous session log so a new session cannot overwrite it', async () => {
+  const s = await Storage.open({ indexedDB: undefined });
+  const log1 = new Logger();
+  const p1 = new LogPersister(log1, s, { batch: 1, intervalMs: 1000 });
+  p1.start();
+  log1.info('s1-a'); log1.info('s1-b'); log1.report('R1');
+  await p1.stop();
+  // second session boots: rotate first, then its own persister starts writing
+  await LogPersister.rotate(s);
+  const log2 = new Logger();
+  const p2 = new LogPersister(log2, s, { batch: 1, intervalMs: 1000 });
+  p2.start();
+  log2.info('s2-a');
+  await p2.stop();
+  const prev = await LogPersister.loadPrevious(s);
+  assert.deepEqual(prev.map((e) => e.text), ['s1-a', 's1-b', 'R1']);
+  assert.deepEqual((await LogPersister.loadLast(s)).map((e) => e.text), ['s2-a']);
+  await LogPersister.rotate(s);
+  assert.deepEqual((await LogPersister.loadPrevious(s)).map((e) => e.text), ['s2-a']);
+});

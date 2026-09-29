@@ -64,31 +64,45 @@ export class Queue {
     const cur = this.current;
     if (!cur) return;
     cur.attempts++;
+    cur.timedOut = false;
     if (cur.attempts > 1) { this.stats.resent++; this.log.warn(`逾時重送 (${cur.attempts - 1}/${this.retries})`); } else this.stats.sent++;
     this.log.tx(cur.frame);
     cur.timer = setTimeout(() => this.#onTimeout(), this.timeoutMs);
+    cur.writing = true;
     try {
       await this.transport.write(cur.frame);
     } catch (err) {
+      cur.writing = false;
       if (this.current !== cur) return;
       clearTimeout(cur.timer);
       this.current = null;
+      this.stats.writeErrors = (this.stats.writeErrors ?? 0) + 1;
       this.log.error(`寫入失敗：${err.message}`);
       this.#settle(cur, null, err);
+      this.#recordFailure();
       this.#pump();
+      return;
     }
+    cur.writing = false;
+    // the timer fired while the GATT write was still pending: judge it now, never overlap two writes
+    if (cur.timedOut && this.current === cur) this.#onTimeout();
+  }
+
+  #recordFailure() {
+    this.consecutiveFailures++;
+    if (this.consecutiveFailures >= this.deadAfter) { this.consecutiveFailures = 0; for (const cb of this.deadCbs) cb(); }
   }
 
   #onTimeout() {
     const cur = this.current;
     if (!cur) return;
+    if (cur.writing) { cur.timedOut = true; return; }
     if (cur.attempts <= this.retries) { this.#transmit(); return; }
     this.stats.timeouts++;
-    this.consecutiveFailures++;
     this.current = null;
     this.log.error(`無回應，放棄（${cur.attempts} 次）`);
     this.#settle(cur, null, new TimeoutError('device did not respond'));
-    if (this.consecutiveFailures >= this.deadAfter) { this.consecutiveFailures = 0; for (const cb of this.deadCbs) cb(); }
+    this.#recordFailure();
     this.#pump();
   }
 

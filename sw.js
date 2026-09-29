@@ -21,7 +21,8 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key);
+    // only our own versioned caches: Cache Storage is per-origin, and GitHub Pages shares an origin across projects
+    for (const key of await caches.keys()) if (key.startsWith('dspx8s-') && key !== CACHE) await caches.delete(key);
     await self.clients.claim();
     const clients = await self.clients.matchAll();
     for (const c of clients) c.postMessage({ type: 'cached', version: VERSION });

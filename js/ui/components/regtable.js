@@ -21,7 +21,7 @@ export function renderRegTable(ctx, el) {
       const name = describeAddr(addr);
       if (needle && !name.toLowerCase().includes(needle)) continue;
       const v = ctx.store.get(addr), st = ctx.store.getStatus(addr);
-      const dev = st === STATUS.MISMATCH ? `（機器 ${ctx.store.deviceValues.get(addr)}）` : '';
+      const dev = st === STATUS.MISMATCH ? `（機器 ${ctx.store.deviceValues.get(addr) ?? '無回應'}）` : '';
       rows.push(`<tr class="status-${st}"><td>${addr}</td><td>${name}</td><td>${v}</td><td>0x${v.toString(16).toUpperCase().padStart(4, '0')}</td><td>${STATUS_TEXT[st]}${dev}</td></tr>`);
     }
     body.innerHTML = rows.join('') || '<tr><td colspan="5" class="muted">沒有符合的位址</td></tr>';

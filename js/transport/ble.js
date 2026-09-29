@@ -61,18 +61,24 @@ export class BleTransport {
     this.device = device ?? await this.bluetooth.requestDevice(options);
     this.name = this.device.name || this.device.id || '(未命名)';
     this.log?.info(`選擇裝置：${this.name}`);
-    this.device.addEventListener('gattserverdisconnected', this.onGattLost);
-    const server = await this.device.gatt.connect();
-    this.log?.info('GATT 已連線，尋找 service ae00');
-    const service = await server.getPrimaryService(SERVICE_UUID);
-    this.writeChar = await service.getCharacteristic(WRITE_UUID);
-    this.notifyChar = await service.getCharacteristic(NOTIFY_UUID);
-    const p = this.writeChar.properties;
-    this.log?.info(`characteristic ae01 write=${p.write} writeWithoutResponse=${p.writeWithoutResponse}；ae02 notify=${this.notifyChar.properties.notify}`);
-    await this.notifyChar.startNotifications();
-    this.notifyChar.addEventListener('characteristicvaluechanged', this.onValue);
-    this.connected = true;
-    return { name: this.name };
+    try {
+      this.device.addEventListener('gattserverdisconnected', this.onGattLost);
+      const server = await this.device.gatt.connect();
+      this.log?.info('GATT 已連線，尋找 service ae00');
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      this.writeChar = await service.getCharacteristic(WRITE_UUID);
+      this.notifyChar = await service.getCharacteristic(NOTIFY_UUID);
+      const p = this.writeChar.properties;
+      this.log?.info(`characteristic ae01 write=${p.write} writeWithoutResponse=${p.writeWithoutResponse}；ae02 notify=${this.notifyChar.properties.notify}`);
+      await this.notifyChar.startNotifications();
+      this.notifyChar.addEventListener('characteristicvaluechanged', this.onValue);
+      this.connected = true;
+      return { name: this.name };
+    } catch (err) {
+      this.log?.warn(`連線中途失敗，釋放 GATT：${err.message}`);
+      await this.disconnect(); // release the single BLE link the DSP offers, remove listeners
+      throw err;
+    }
   }
 
   async disconnect() {

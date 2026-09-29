@@ -72,7 +72,7 @@ export function init(ctx, el) {
   });
   $('#log-clear').addEventListener('click', async () => { if (await confirmDialog('清除目前日誌？')) { logger.clear(); renderAll(); } });
   $('#log-restore').addEventListener('click', async () => {
-    const last = await LogPersister.loadLast(storage);
+    const last = await LogPersister.loadPrevious(storage);
     if (!last) { toast('沒有上次日誌'); return; }
     if (await confirmDialog(`載入上次保存的 ${last.length} 行日誌？目前日誌會接在後面。`)) { logger.restore([...last, ...logger.entries]); renderAll(); }
   });

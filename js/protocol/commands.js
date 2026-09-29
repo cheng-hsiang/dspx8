@@ -80,8 +80,12 @@ export function matchesRequest(req, resp) {
   }
 }
 
+/** Key for merging a pending request with a newer one that targets the same address set. */
 export function coalesceKey(frame) {
   const c = frame[2];
   if (c !== CMD.WRITE && c !== CMD.READ) return null;
-  return `${c}:${u16(frame[3], frame[4])}:${frame.length}`;
+  const step = c === CMD.WRITE ? 4 : 2;
+  const addrs = [];
+  for (let i = 3; i + 1 < frame.length - 2; i += step) addrs.push(u16(frame[i], frame[i + 1]));
+  return `${c}:${addrs.join(',')}`;
 }

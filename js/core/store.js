@@ -47,15 +47,16 @@ export class RegisterStore {
     this.#notify(changed);
   }
 
+  /** deviceVal null means the device left the address out of its reply. */
   markMismatch(addr, deviceVal) {
     if (!this.#inRange(addr)) return;
     this.status[addr] = STATUS.MISMATCH;
-    this.deviceValues.set(addr, deviceVal & 0xFFFF);
+    this.deviceValues.set(addr, deviceVal == null ? null : deviceVal & 0xFFFF);
     this.#notify([addr]);
   }
 
   acceptDevice(addr) {
-    if (!this.deviceValues.has(addr)) return;
+    if (!this.deviceValues.has(addr) || this.deviceValues.get(addr) === null) return;
     this.set(addr, this.deviceValues.get(addr), STATUS.CONFIRMED);
   }
 

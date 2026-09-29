@@ -46,12 +46,40 @@ test('wrong customer id → readonly, writes refused without sending', async () 
   await device.disconnect();
 });
 
-test('TYPE fields and out-of-range addresses are refused', async () => {
-  const { device } = make();
+test('TYPE fields, out-of-range and non-allow-listed addresses are refused without sending', async () => {
+  const { device, transport } = make();
   await device.connect();
-  await assert.rejects(device.writeRegs([{ addr: eqAddr(1, 1, 'TYPE'), val: 1 }]), RangeError);
-  await assert.rejects(device.writeRegs([{ addr: xoverAddr(1, 2, 'TYPE'), val: 1 }]), RangeError);
-  await assert.rejects(device.writeRegs([{ addr: DUMP_END + 1, val: 1 }]), RangeError);
+  const sentBefore = transport.sent.length;
+  for (const addr of [eqAddr(1, 1, 'TYPE'), xoverAddr(1, 2, 'TYPE'), xoverAddr(1, 1, 'F'), DUMP_END + 1, ADDR.M0_MODE, ADDR.compressor(3, 1), ADDR.iir100(1, 1, 'G'), ADDR.switch21(2)]) {
+    await assert.rejects(device.writeRegs([{ addr, val: 1 }]), RangeError, `addr ${addr}`);
+  }
+  assert.equal(transport.sent.length, sentBefore);
+  await device.writeRegs([{ addr: ADDR.M0_INPUT_SET, val: 7 }, { addr: ADDR.delay(8), val: 100 }, { addr: ADDR.mix41(3, 1), val: 500 }]);
+  await device.disconnect();
+});
+
+test('a short sect response is completed by plain reads instead of being marked complete', async () => {
+  const { device, store } = make({ sectLimit: 5 });
+  await device.connect();
+  assert.equal(device.dumpInfo.complete, true);
+  assert.equal(device.dumpInfo.method, 'mixed');
+  assert.equal(store.confirmedCount(), DUMP_END + 1);
+  assert.equal(store.getStatus(DUMP_END), STATUS.CONFIRMED);
+  await device.disconnect();
+});
+
+test('verify flags an address missing from the read response instead of passing it', async () => {
+  const addr3 = eqAddr(1, 3, 'G'), addr4 = eqAddr(1, 4, 'G');
+  const { device, store } = make({ omitReadAddrs: [addr4] });
+  await device.connect();
+  await device.writeRegs([{ addr: addr3, val: 560 }]);
+  await device.writeRegs([{ addr: addr4, val: 530 }]);
+  const mism = await device.verify([addr3, addr4]);
+  assert.deepEqual(mism, [{ addr: addr4, expected: 530, actual: null }]);
+  assert.equal(store.getStatus(addr4), STATUS.MISMATCH);
+  assert.equal(store.getStatus(addr3), STATUS.CONFIRMED);
+  // a single-address read whose only pair is missing cannot be matched to the request: it fails safe with a timeout, never ok:true
+  await assert.rejects(device.writeTest(1, 4, 6));
   await device.disconnect();
 });
 

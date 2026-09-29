@@ -29,6 +29,7 @@ async function boot() {
   logger.info(`瀏覽器: ${env.userAgent}`);
   logger.info(`WebBluetooth=${env.webBluetooth} Bluefy=${env.bluefy} 安裝模式=${env.standalone} HTTPS=${env.secure} 儲存=${storage.backend}`);
 
+  await LogPersister.rotate(storage); // keep the previous session's log (and its report) safe before we start writing ours
   const persister = new LogPersister(logger, storage);
   persister.start();
   window.addEventListener('pagehide', () => persister.flush());

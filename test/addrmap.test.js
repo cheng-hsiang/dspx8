@@ -31,6 +31,23 @@ test('isTypeAddr flags every TYPE field and nothing else in the channel region',
   assert.equal(a.isTypeAddr(1252), false); // IIR100 layer is not guarded here
 });
 
+test('isWritableAddr allows only EQ F/G/Q and the listed sound registers', () => {
+  for (const ch of [1, 8]) for (const band of [1, 32]) for (const f of ['F', 'G', 'Q']) assert.equal(a.isWritableAddr(a.eqAddr(ch, band, f)), true, `eq ${ch} ${band} ${f}`);
+  assert.equal(a.isWritableAddr(a.eqAddr(1, 1, 'TYPE')), false);
+  assert.equal(a.isWritableAddr(a.xoverAddr(1, 1, 'F')), false);
+  assert.equal(a.isWritableAddr(a.xoverAddr(8, 2, 'Q')), false);
+  for (let ch = 1; ch <= 8; ch++) {
+    assert.equal(a.isWritableAddr(a.ADDR.muteOfChannel(ch)), true);
+    assert.equal(a.isWritableAddr(a.ADDR.mix11(ch)), true);
+    assert.equal(a.isWritableAddr(a.ADDR.mix41(ch, 1)), true);
+    assert.equal(a.isWritableAddr(a.ADDR.delay(ch)), true);
+  }
+  assert.equal(a.isWritableAddr(a.ADDR.M0_INPUT_SET), true);
+  for (const bad of [0, a.ADDR.mute(1), a.ADDR.mute(10), a.ADDR.mix11(9), a.ADDR.mix41(1, 2), a.ADDR.switch21(2), a.ADDR.delay(9), a.ADDR.compressor(3, 0), a.MODE_END, a.ADDR.M0_MODE, a.ADDR.M0_INPUT_CUR, a.ADDR.iir100(1, 1, 'G'), 1572, a.ADDR.USB_L_VOL, a.ADDR.APP_END, 1613, 5000, -1]) {
+    assert.equal(a.isWritableAddr(bad), false, `addr ${bad} should be refused`);
+  }
+});
+
 test('named registers', () => {
   assert.equal(a.ADDR.mute(2), 2);
   assert.equal(a.ADDR.muteOfChannel(1), 2);
