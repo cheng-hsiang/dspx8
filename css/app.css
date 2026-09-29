@@ -33,3 +33,8 @@ tr.status-2 td { color: var(--accent); } tr.status-3 td { color: var(--err); } t
 .banner.warn { border-color: var(--warn); }
 .modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .modes button.active { outline: 2px solid var(--accent); }
 textarea.copyfallback { width: 100%; height: 40vh; font-family: ui-monospace, monospace; font-size: 12px; background: #0b0f13; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; }
+#eq-chips button.active { outline: 2px solid var(--accent); color: var(--accent); }
+.eq-canvas { display: block; width: 100%; height: 230px; border-radius: 10px; background: #0b0f13; }
+.bands { max-height: 42vh; overflow: auto; }
+.bands tr.sel td { background: #1f2a36; }
+.bands tr.off td { color: var(--muted); font-style: italic; }

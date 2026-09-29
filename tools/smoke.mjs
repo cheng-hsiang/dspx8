@@ -81,6 +81,32 @@ const SCRIPT = `(async () => {
   out.modeActive = document.querySelector('.modes button.active')?.dataset.mode;
   out.snapshots = (await window.dspx.storage.getAll('snapshots')).length;
   out.storage = window.dspx.storage.backend;
+  // EQ page: bundled presets load, preset apply writes both front channels, nudge writes through the throttle, verify leaves no mismatch
+  document.querySelector('[data-tab="eq"]').click();
+  out.eqCanvas = Boolean(document.querySelector('#eq-curve'));
+  out.eqPresetsLoaded = await until(() => window.dspx.eq && window.dspx.eq.state.bundled.length === 4, 8000);
+  out.eqPresetApplied = await window.dspx.eq.loadPreset('02 K-pop / J-pop', { confirm: false });
+  const { eqAddr } = await import('./js/protocol/addrmap.js');
+  out.eqBandCh1 = window.dspx.store.get(eqAddr(1, 5, 'G'));
+  out.eqBandCh2 = window.dspx.store.get(eqAddr(2, 5, 'G'));
+  out.eqBandCh3Zero = window.dspx.store.get(eqAddr(3, 5, 'G'));
+  window.dspx.eq.nudge(9, { g: -4 });
+  out.eqNudged = await until(() => window.dspx.store.get(eqAddr(1, 10, 'G')) === 460 && window.dspx.store.get(eqAddr(2, 10, 'G')) === 460 && window.dspx.store.getStatus(eqAddr(1, 10, 'G')) === 1, 4000);
+  let mism = 0; for (let a = 138; a < 1226; a++) if (window.dspx.store.getStatus(a) === 3) mism++;
+  out.eqMismatches = mism;
+  return out;
+})()`;
+
+const SCRIPT_B = `(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (fn, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (fn()) return true; await sleep(50); } return false; };
+  const out = {};
+  document.querySelector('[data-tab="bluetooth"]').click();
+  document.querySelector('#bt-disconnect').click();
+  await until(() => window.dspx.device.state === 'disconnected', 4000);
+  document.querySelector('[data-tab="eq"]').click();
+  await sleep(100);
+  out.eqDisabledWhenOffline = document.querySelector('#eq-gain').disabled && document.querySelector('#eq-load').disabled;
   out.swReady = await until(() => (document.querySelector('#offline-status').textContent || '').includes('已可離線使用'), 10000);
   const keys = await caches.keys();
   out.cacheName = keys.find((k) => k.startsWith('dspx8s-')) || null;
@@ -95,8 +121,18 @@ try {
   const cdp = await Cdp.open(target.webSocketDebuggerUrl);
   await cdp.send('Runtime.enable');
   await cdp.send('Page.enable');
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 412, height: 1100, deviceScaleFactor: 2, mobile: true });
   await sleep(1500);
-  const result = await cdp.evaluate(SCRIPT);
+  const resultA = await cdp.evaluate(SCRIPT);
+  // phone-sized screenshot of the EQ page for a visual check (written next to this script's output dir)
+  try {
+    const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    const { writeFile, mkdir } = await import('node:fs/promises');
+    await mkdir(join(ROOT, '.smoke'), { recursive: true });
+    await writeFile(join(ROOT, '.smoke', 'eq.png'), Buffer.from(shot.data, 'base64'));
+  } catch (err) { console.warn('screenshot failed', err.message); }
+  const resultB = await cdp.evaluate(SCRIPT_B);
+  const result = { ...resultA, ...resultB };
   const errors = cdp.events.filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error'))
     .map((e) => e.method === 'Runtime.exceptionThrown' ? e.params.exceptionDetails.exception?.description ?? e.params.exceptionDetails.text : e.params.args.map((a) => a.value ?? a.description).join(' '));
   const checks = {
@@ -105,6 +141,9 @@ try {
     volInitial30: result.volInitial === '30', volWritten: result.volWritten, muteWritten: result.muteWritten, modeActive1: result.modeActive === '1',
     snapshotSaved: result.snapshots >= 1, noConsoleErrors: errors.length === 0,
     swReady: result.swReady, precacheComplete: result.cachedFiles >= 31,
+    eqCanvas: result.eqCanvas, eqPresetsLoaded: result.eqPresetsLoaded, eqPresetApplied: result.eqPresetApplied,
+    eqFrontWritten: result.eqBandCh1 === 530 && result.eqBandCh2 === 530, eqRearUntouched: result.eqBandCh3Zero === 500,
+    eqNudged: result.eqNudged, eqNoMismatch: result.eqMismatches === 0, eqDisabledWhenOffline: result.eqDisabledWhenOffline,
   };
   console.log(JSON.stringify({ result, errors, checks }, null, 1));
   const failed = Object.entries(checks).filter(([, v]) => !v).map(([k]) => k);
