@@ -8,6 +8,7 @@
     "test": "node --test",
     "serve": "node tools/serve.mjs",
     "smoke": "node tools/smoke.mjs",
+    "pack": "node tools/pack.mjs",
     "icons": "node tools/make-icons.mjs",
     "tables": "node tools/gen-tables.mjs"
   },
