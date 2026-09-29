@@ -25,5 +25,5 @@ test('detectEnvironment reads navigator and window safely', () => {
   assert.deepEqual(env, { userAgent: 'Mozilla/5.0 (iPhone) Bluefy/3.9', webBluetooth: true, bluefy: true, standalone: true, secure: true });
   const none = detectEnvironment({ userAgent: 'x' }, {});
   assert.deepEqual(none, { userAgent: 'x', webBluetooth: false, bluefy: false, standalone: false, secure: false });
-  assert.equal(detectEnvironment(undefined, undefined).userAgent, 'unknown');
+  assert.equal(detectEnvironment(null, null).userAgent, 'unknown');
 });
