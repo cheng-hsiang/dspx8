@@ -71,3 +71,9 @@ test('detectEnvironment reads navigator and window safely', () => {
   assert.deepEqual(none, { userAgent: 'x', webBluetooth: false, bluefy: false, standalone: false, secure: false });
   assert.equal(detectEnvironment(null, null).userAgent, 'unknown');
 });
+
+test('a rejected or cancelled device chooser becomes a clear NO_DEVICE error, even when the browser gives no message', async () => {
+  const t = new BleTransport({ bluetooth: { requestDevice: async () => { throw undefined; } } });
+  await assert.rejects(t.connect(), (err) => err.code === 'NO_DEVICE' && /沒有選到裝置/.test(err.message));
+  assert.equal(t.connected, false);
+});

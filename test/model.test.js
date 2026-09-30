@@ -121,3 +121,16 @@ test('reset and copy helpers', () => {
   assert.ok(!copy.some((p) => p.addr === eqAddr(3, 2, 'TYPE')));
   assert.ok(!copy.some((p) => p.addr === eqAddr(3, 32, 'G')), 'slot 32 is outside the 31 shown bands and is not copied');
 });
+
+test('nonFlatBands lists enabled bands whose gain is not 0 dB on a layer, and flattenPairs zeroes just those gains', () => {
+  const s = seeded();
+  assert.deepEqual(m.nonFlatBands(s, m.LAYERS.APP, [1, 2]), []);
+  s.set(m.bandAddrs(m.LAYERS.APP, 1, 1).G, 530);
+  s.set(m.bandAddrs(m.LAYERS.APP, 2, 5).G, 470);
+  s.set(m.bandAddrs(m.LAYERS.APP, 3, 5).G, 470); // CH3 is not asked for
+  const hits = m.nonFlatBands(s, m.LAYERS.APP, [1, 2]);
+  assert.deepEqual(hits.map((b) => [b.ch, b.band, b.g]), [[1, 1, 3], [2, 5, -3]]);
+  assert.deepEqual(m.flattenPairs(hits), [{ addr: m.bandAddrs(m.LAYERS.APP, 1, 1).G, val: 500 }, { addr: m.bandAddrs(m.LAYERS.APP, 2, 5).G, val: 500 }]);
+  assert.equal(m.otherLayer(m.LAYERS.MODE), m.LAYERS.APP);
+  assert.equal(m.otherLayer(m.LAYERS.APP), m.LAYERS.MODE);
+});

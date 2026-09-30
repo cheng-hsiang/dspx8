@@ -1,11 +1,11 @@
 import { eqAddr, ADDR, EQ_SLOTS } from '../protocol/addrmap.js';
-import { encodeFreq, decodeFreq, encodeGain, decodeGain, decodeQ, clamp, GAIN_MIN_DB, GAIN_MAX_DB } from '../protocol/codec.js';
+import { encodeFreq, decodeFreq, encodeGain, decodeGain, decodeQ, clamp, GAIN_MIN_DB, GAIN_MAX_DB, QRATE } from '../protocol/codec.js';
 import { TAB_FREQ, TAB_Q } from '../protocol/tables.js';
 import { inferQScale as reportInfer } from '../core/report.js';
 
 export const LAYERS = Object.freeze({ MODE: 'mode', APP: 'app' });
-/** Q divisor the OEM app applies on the 10-band layer (raw = 100·Q / QRATE). Unknown for the 31-band layer until measured. */
-export const QRATE = 7.6 / 2.4;
+/** Q divisor the OEM app applies (raw = 100·Q / QRATE); defined in the codec so the log formatter can share it. */
+export { QRATE };
 
 export function layerInfo(layer) {
   return layer === LAYERS.APP
@@ -135,6 +135,16 @@ export function presetWritePairs(preset, layer, groups, store, qScale) {
   const pairs = Array.from(target, ([addr, val]) => ({ addr, val }));
   return { pairs, dropped, skipped };
 }
+
+export const otherLayer = (layer) => (layer === LAYERS.APP ? LAYERS.MODE : LAYERS.APP);
+
+/** Enabled bands on `layer` whose gain is not 0 dB. The two layers act in series, so a forgotten curve here stacks onto the one being edited. */
+export function nonFlatBands(store, layer, channels) {
+  const out = [];
+  for (const ch of channels) for (const b of readBands(store, { layer, ch })) if (b.enabled && b.raw.G !== 500) out.push({ ch, band: b.band, g: b.g, addr: b.addrs.G });
+  return out;
+}
+export const flattenPairs = (hits) => hits.map((h) => ({ addr: h.addr, val: 500 }));
 
 export function resetChannelPairs(layer, ch, store) {
   return readBands(store, { layer, ch }).filter((b) => b.enabled).map((b) => ({ addr: b.addrs.G, val: 500 }));

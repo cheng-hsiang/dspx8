@@ -16,7 +16,7 @@ test('summaries for responses decode values by field', () => {
   assert.equal(summarizeFrame(buildFrame(0x00, [0x0F, 0xA6]), 'rx'), 'CHECK_ID id=4006');
   assert.equal(summarizeFrame(buildFrame(0x06, [0x04, 0xE0, 0x00, 0x02, 0x04, 0xDA, 0x00, 0x01]), 'rx'), 'READ M0_22=2, M0_16=1');
   assert.equal(summarizeFrame(buildFrame(0x03, [0x00, 0x9B, 0x82, 0x58]), 'rx'), 'WRITE CH1 EQ3 F=33368 (60 Hz)');
-  assert.equal(summarizeFrame(buildFrame(0x03, [0x00, 0x9D, 0x01, 0xB0]), 'rx'), 'WRITE CH1 EQ3 Q=432 (Q 4.32)');
+  assert.equal(summarizeFrame(buildFrame(0x03, [0x00, 0x9D, 0x01, 0xB0]), 'rx'), 'WRITE CH1 EQ3 Q=432 (Q 13.68)');
   assert.equal(summarizeFrame(buildFrame(0x03, [0x00, 0x0C, 0x02, 0x3A]), 'rx'), 'WRITE MIX11_1=570 (vol 70, flag)');
   assert.equal(summarizeFrame(buildFrame(0x03, [0x00, 0x49, 0x03, 0xE8]), 'rx'), 'WRITE DELAY_1=1000 (1.000 ms)');
   assert.equal(summarizeFrame(buildFrame(0x03, [0x00, 0x02, 0x00, 0x01]), 'rx'), 'WRITE MUTE_2=1 (靜音)');

@@ -19,6 +19,11 @@ export const decodeFreq = (raw) => ((raw & 0x8000) ? (raw & 0x7FFF) / 10 : raw);
 
 export const encodeQ = (q) => Math.round(q * 100);
 export const decodeQ = (raw) => raw / 100;
+/** OEM Q scaling: register = 100·Q / QRATE, so the factory raw 240 is Q 7.6 and a preset Q 1.0 is raw 32. */
+export const QRATE = 7.6 / 2.4;
+export const rawToQ = (raw) => (raw * QRATE) / 100;
+export const qToRaw = (q) => Math.round((q * 100) / QRATE);
+export const describeQ = (raw) => String(Math.round(rawToQ(raw) * 100) / 100);
 
 export const encodeVol = (vol, flag) => vol + (flag ? 500 : 0);
 export const decodeVol = (raw) => (raw >= 500 ? { vol: raw - 500, flag: true } : { vol: raw, flag: false });
@@ -29,5 +34,6 @@ export const decodeMasterVol = (raw) => clamp(decodeVol(raw).vol - MASTER_VOL_OF
 export const msToDelayRaw = (ms) => clamp(Math.round(ms * 1000), 0, DELAY_MAX_US);
 export const delayRawToMs = (raw) => raw / 1000;
 export const delayRawToCm = (raw) => Math.round(raw * SOUND_CM_PER_US * 100) / 100;
+export const cmToDelayRaw = (cm) => clamp(Math.round(cm / SOUND_CM_PER_US), 0, DELAY_MAX_US);
 export const samplesToDelayRaw = (n) => clamp(Math.round((n * 1e6) / SAMPLE_RATE), 0, DELAY_MAX_US);
 export const delayRawToSamples = (raw) => Math.round((raw * SAMPLE_RATE) / 1e6);

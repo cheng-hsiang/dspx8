@@ -1,5 +1,5 @@
 import { ADDR, eqAddr, xoverAddr, describeAddr, CH_COUNT } from '../protocol/addrmap.js';
-import { decodeGain, decodeFreq, decodeQ, decodeVol } from '../protocol/codec.js';
+import { decodeGain, decodeFreq, describeQ, decodeVol } from '../protocol/codec.js';
 
 export function inferQScale(store) {
   const qRaw = [];
@@ -11,7 +11,7 @@ export function inferQScale(store) {
 
 function filterLine(store, label, typeAddr) {
   const t = store.get(typeAddr), f = store.get(typeAddr + 1), g = store.get(typeAddr + 2), q = store.get(typeAddr + 3);
-  return `${label}: TYPE=${t} F=${f} (${decodeFreq(f)} Hz) G=${g} (${decodeGain(g).toFixed(1)} dB) Q=${q} (Q ${decodeQ(q)})`;
+  return `${label}: TYPE=${t} F=${f} (${decodeFreq(f)} Hz) G=${g} (${decodeGain(g).toFixed(1)} dB) Q=${q} (Q ${describeQ(q)})`;
 }
 
 function rawList(store, addrs) {

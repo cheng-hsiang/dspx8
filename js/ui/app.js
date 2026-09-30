@@ -4,6 +4,7 @@ import { Logger } from '../core/logger.js';
 import { RegisterStore } from '../core/store.js';
 import { Storage, LogPersister } from '../core/storage.js';
 import { Device } from '../core/device.js';
+import { errText } from '../util/errors.js';
 import * as statusbar from './statusbar.js';
 import * as bluetoothPage from './pages/bluetooth.js';
 import * as soundPage from './pages/sound.js';
@@ -36,7 +37,7 @@ async function boot() {
   window.addEventListener('pagehide', () => persister.flush());
 
   device.on('snapshot', (snap) => { storage.put('snapshots', String(snap.ts), snap).catch(() => {}); });
-  device.on('error', (err) => logger.error(`裝置錯誤：${err.message}`));
+  device.on('error', (err) => logger.debug(`裝置錯誤事件：${errText(err)}`)); // connect() already logged it
 
   statusbar.init(ctx, document.getElementById('statusbar'));
   for (const [name, mod] of Object.entries(PAGES)) mod.init(ctx, document.getElementById(`page-${name}`));
@@ -57,4 +58,4 @@ async function boot() {
   window.dspx = ctx; // 供開發者在 console 檢查
 }
 
-boot().catch((err) => { console.error(err); document.body.insertAdjacentHTML('afterbegin', `<pre class="err" style="padding:16px">啟動失敗：${err.message}</pre>`); });
+boot().catch((err) => { console.error(err); document.body.insertAdjacentHTML('afterbegin', `<pre class="err" style="padding:16px">啟動失敗：${errText(err)}</pre>`); });

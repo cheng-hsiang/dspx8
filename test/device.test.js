@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { Device, STATE } from '../js/core/device.js';
 import { RegisterStore, STATUS } from '../js/core/store.js';
@@ -6,11 +6,14 @@ import { Logger } from '../js/core/logger.js';
 import { FakeDevice } from '../js/transport/fake-device.js';
 import { ADDR, eqAddr, xoverAddr, DUMP_END } from '../js/protocol/addrmap.js';
 
+const created = [];
+after(async () => { for (const d of created) await d.disconnect(); }); // a failed assertion must not leave a heartbeat timer keeping the process alive
 function make(devOpts = {}, opts = {}) {
   const transport = new FakeDevice({ latencyMs: 0, ...devOpts });
   const store = new RegisterStore();
   const logger = new Logger();
   const device = new Device({ transport, store, logger, queueOptions: { timeoutMs: 30, retries: 1, deadAfter: 3 }, heartbeatMs: 20, modeReloadDelayMs: 5, ...opts });
+  created.push(device);
   return { transport, store, logger, device };
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -154,4 +157,51 @@ test('transport disconnect moves state to disconnected and stops heartbeat', asy
   const n = transport.sent.length;
   await wait(60);
   assert.equal(transport.sent.length, n);
+});
+
+test('connect failure with a message-less rejection logs and throws a readable error', async () => {
+  const { device, transport, logger } = make();
+  transport.connect = async () => { throw undefined; };
+  let thrown = null;
+  try { await device.connect(); } catch (err) { thrown = err; }
+  assert.ok(thrown instanceof Error && !thrown.message.includes('undefined'), String(thrown));
+  const err = logger.entries.find((e) => e.level === 'ERR');
+  assert.ok(err && err.text.startsWith('連線失敗：') && !err.text.includes('undefined'), err?.text);
+  assert.equal(device.state, STATE.DISCONNECTED);
+});
+
+test('callMode: writes are locked while switching, the heartbeat does not start a second dump, baseline resets', async () => {
+  const { device, transport, store } = make();
+  await device.connect();
+  const states = []; device.on('state', (s) => states.push(s));
+  let dumps = 0; device.on('dump', () => dumps++);
+  const modes = []; device.on('mode', (m) => modes.push(m));
+  transport.slots[2][eqAddr(2, 2, 'G')] = 470;
+  const p = device.callMode(3);
+  assert.equal(device.state, STATE.SWITCHING);
+  assert.equal(device.canWrite, false);
+  await assert.rejects(device.writeRegs([{ addr: eqAddr(1, 1, 'G'), val: 510 }]), /readonly|switching/);
+  await p;
+  await wait(60); // several heartbeat periods
+  assert.deepEqual(states, [STATE.SWITCHING, STATE.CONNECTED]);
+  assert.equal(dumps, 1);
+  assert.deepEqual(modes, [3]);
+  assert.equal(store.get(ADDR.M0_MODE), 3);
+  assert.equal(store.get(eqAddr(2, 2, 'G')), 470);
+  assert.deepEqual(device.unsavedChanges(), []);
+  await device.disconnect();
+});
+
+test('unsavedChanges tracks mode-region edits since the last dump and clears after saveMode', async () => {
+  const { device, transport } = make();
+  await device.connect();
+  const saved = []; device.on('saved', (n) => saved.push(n));
+  assert.deepEqual(device.unsavedChanges(), []);
+  await device.writeRegs([{ addr: eqAddr(1, 3, 'G'), val: 560 }, { addr: ADDR.iir100(1, 1, 2), val: 530 }]);
+  assert.deepEqual(device.unsavedChanges(), [eqAddr(1, 3, 'G')]); // the 10-band app layer lives outside the mode region
+  await device.saveMode(1);
+  assert.deepEqual(saved, [1]);
+  assert.deepEqual(device.unsavedChanges(), []);
+  assert.equal(transport.slots[0][eqAddr(1, 3, 'G')], 560);
+  await device.disconnect();
 });

@@ -162,3 +162,13 @@ test('clear rejects everything pending and in flight', async () => {
   assert.equal(q.pendingCount, 0);
   assert.equal(q.inFlight, false);
 });
+
+test('a resend of a quiet request is logged at DEBUG, a resend of a normal request at WARN', async () => {
+  const a = await setup({ dropNext: 1, dupReads: false });
+  await a.q.send(cmd.readPacket([1242]), { quiet: true });
+  assert.ok(a.log.entries.some((e) => e.text.includes('逾時重送')));
+  assert.ok(a.log.entries.every((e) => e.level === 'DEBUG'), a.log.entries.map((e) => `${e.level}:${e.text}`).join('\n'));
+  const b = await setup({ dropNext: 1, dupReads: false });
+  await b.q.send(cmd.readPacket([1242]));
+  assert.ok(b.log.entries.some((e) => e.level === 'WARN' && e.text.includes('逾時重送')));
+});

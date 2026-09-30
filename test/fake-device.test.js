@@ -141,3 +141,11 @@ test('write before connect rejects', async () => {
   const dev = new FakeDevice();
   await assert.rejects(dev.write(cmd.checkIdPacket()), /not connected/);
 });
+
+test('writing the input source (M0_8) is mirrored into the reported input (M0_22), as the OEM app expects of the real unit', async () => {
+  const dev = new FakeDevice({ latencyMs: 0 });
+  await dev.connect();
+  await roundTrip(dev, cmd.writePacket([{ addr: ADDR.M0_INPUT_SET, val: 4 }]));
+  assert.equal(dev.regs[ADDR.M0_INPUT_SET], 4);
+  assert.equal(dev.regs[ADDR.M0_INPUT_CUR], 0x14);
+});

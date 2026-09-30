@@ -1,11 +1,11 @@
 import { CMD, CMD_NAMES } from './commands.js';
-import { u16, decodeGain, decodeFreq, decodeQ, decodeVol, delayRawToMs } from './codec.js';
+import { u16, decodeGain, decodeFreq, describeQ, decodeVol, delayRawToMs } from './codec.js';
 import { describeAddr } from './addrmap.js';
 
 function fmtValue(name, val) {
   if (/ G$/.test(name)) { const db = decodeGain(val); return `${val} (${db >= 0 ? '+' : ''}${db.toFixed(1)} dB)`; }
   if (/ F$/.test(name)) return `${val} (${decodeFreq(val)} Hz)`;
-  if (/ Q$/.test(name)) return `${val} (Q ${decodeQ(val)})`;
+  if (/ Q$/.test(name)) return `${val} (Q ${describeQ(val)})`;
   if (/^MIX/.test(name) || /_VOL$/.test(name)) { const { vol, flag } = decodeVol(val); return `${val} (vol ${vol}${flag ? ', flag' : ''})`; }
   if (/^DELAY_/.test(name)) return `${val} (${delayRawToMs(val).toFixed(3)} ms)`;
   if (/^MUTE_/.test(name)) return `${val} (${val ? '靜音' : '開'})`;

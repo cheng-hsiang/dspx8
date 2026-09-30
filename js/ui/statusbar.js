@@ -2,7 +2,7 @@ import { STATE } from '../core/device.js';
 import { ADDR } from '../protocol/addrmap.js';
 import { INPUT_NAMES } from '../protocol/tables.js';
 
-const STATE_TEXT = { [STATE.DISCONNECTED]: '未連線', [STATE.CONNECTING]: '連線中', [STATE.CONNECTED]: '已連線', [STATE.READONLY]: '唯讀（代碼不符）' };
+const STATE_TEXT = { [STATE.DISCONNECTED]: '未連線', [STATE.CONNECTING]: '連線中', [STATE.CONNECTED]: '已連線', [STATE.READONLY]: '唯讀（代碼不符）', [STATE.SWITCHING]: '切換模式中' };
 
 export function init(ctx, el) {
   el.innerHTML = `<span class="dot"></span><span id="sb-state">未連線</span><span class="muted" id="sb-name"></span><span style="flex:1"></span><span id="sb-mode" class="muted">模式 -</span><span id="sb-input" class="muted">輸入 -</span>${ctx.transportKind === 'sim' ? '<span class="warn">模擬</span>' : ''}`;

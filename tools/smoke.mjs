@@ -77,6 +77,20 @@ const SCRIPT = `(async () => {
   out.volWritten = await until(() => window.dspx.store.get(12) === 585 && window.dspx.store.getStatus(12) === 1);
   document.querySelector('[data-mute="1"]').click();
   out.muteWritten = await until(() => window.dspx.store.get(2) === 1);
+  // phase flag, per-channel level, delay in cm and per sample, input source
+  document.querySelector('[data-ch="1"] [data-phase]').click();
+  out.phaseInverted = await until(() => window.dspx.store.get(26) === 100);
+  document.querySelector('[data-ch="1"] [data-phase]').click();
+  out.phaseRestored = await until(() => window.dspx.store.get(26) === 600);
+  const lvl = document.querySelector('[data-ch="3"] [data-level]'); lvl.value = '94'; lvl.dispatchEvent(new Event('change'));
+  out.levelWritten = await until(() => window.dspx.store.get(14) === 594);
+  const cmIn = document.querySelector('[data-ch="1"] [data-cm]'); cmIn.value = '34.6'; cmIn.dispatchEvent(new Event('change'));
+  out.delayWritten = await until(() => window.dspx.store.get(73) === 1000);
+  document.querySelector('[data-ch="1"] [data-dadd]').click();
+  out.delayStepped = await until(() => window.dspx.store.get(73) === 1021);
+  document.querySelector('#inputs [data-input="4"]').click();
+  out.inputWritten = await until(() => window.dspx.store.get(1248) === 0x14 && document.querySelector('#inputs [data-input="4"]').classList.contains('active'));
+  out.tabsOnTop = document.querySelector('header.top #tabs') !== null && getComputedStyle(document.querySelector('#tabs')).position !== 'fixed';
   document.querySelector('[data-tab="modes"]').click();
   out.modeActive = document.querySelector('.modes button.active')?.dataset.mode;
   out.snapshots = (await window.dspx.storage.getAll('snapshots')).length;
@@ -94,6 +108,21 @@ const SCRIPT = `(async () => {
   out.eqNudged = await until(() => window.dspx.store.get(eqAddr(1, 10, 'G')) === 460 && window.dspx.store.get(eqAddr(2, 10, 'G')) === 460 && window.dspx.store.getStatus(eqAddr(1, 10, 'G')) === 1, 4000);
   let mism = 0; for (let a = 138; a < 1226; a++) if (window.dspx.store.getStatus(a) === 3) mism++;
   out.eqMismatches = mism;
+  // the layer not being edited still runs: a curve left on the 10-band layer must be flagged and zeroable
+  await window.dspx.device.writeRegs([{ addr: 1254, val: 530 }]);
+  out.otherLayerWarned = await until(() => !document.querySelector('#eq-other').hidden && document.querySelector('#eq-other-text').textContent.includes('1 個'));
+  out.otherLayerZeroed = (await window.dspx.eq.zeroOtherLayer({ confirm: false })) && window.dspx.store.get(1254) === 500 && (await until(() => document.querySelector('#eq-other').hidden));
+  // modes: switch to slot 2 (factory flat), edit, save; the unsaved counter must return to zero and the slot must hold the edit
+  out.modeSwitched = await window.dspx.modes.call(2, { confirm: false });
+  out.modeActive2 = document.querySelector('.modes button.active')?.dataset.mode === '2' && window.dspx.store.get(1242) === 2 && window.dspx.device.state === 'connected';
+  out.modeEqFlat = window.dspx.store.get(eqAddr(1, 5, 'G')) === 500;
+  window.dspx.eq.nudge(4, { g: 2 });
+  await until(() => window.dspx.eq.idle() && window.dspx.store.get(eqAddr(1, 5, 'G')) === 520, 4000);
+  out.unsavedBefore = window.dspx.device.unsavedChanges().length;
+  out.modeSaved = await window.dspx.modes.save({ confirm: false });
+  out.unsavedAfter = window.dspx.device.unsavedChanges().length;
+  out.slotSaved = window.dspx.device.transport.slots[1][eqAddr(1, 5, 'G')] === 520;
+  out.modeUnsavedText = document.querySelector('#mode-unsaved').textContent;
   return out;
 })()`;
 
@@ -151,10 +180,14 @@ try {
   const resultA = await cdp.evaluate(SCRIPT);
   // phone-sized screenshot of the EQ page for a visual check (written next to this script's output dir)
   try {
-    const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
     const { writeFile, mkdir } = await import('node:fs/promises');
     await mkdir(join(ROOT, '.smoke'), { recursive: true });
-    await writeFile(join(ROOT, '.smoke', 'eq.png'), Buffer.from(shot.data, 'base64'));
+    for (const tab of ['eq', 'sound', 'modes']) {
+      await cdp.evaluate(`document.querySelector('[data-tab="${tab}"]').click(); window.scrollTo(0, 0); true`);
+      await sleep(300);
+      const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+      await writeFile(join(ROOT, '.smoke', `${tab}.png`), Buffer.from(shot.data, 'base64'));
+    }
   } catch (err) { console.warn('screenshot failed', err.message); }
   const resultB = await cdp.evaluate(SCRIPT_B);
   // slow-link scenario: real pointer drag on the curve with 60 ms per BLE chunk (21 sect replies + BT status frames must still beat the 1.7 s timeout); no false mismatch, final value = last drag
@@ -175,6 +208,11 @@ try {
     eqNudged: result.eqNudged, eqNoMismatch: result.eqMismatches === 0, eqDisabledWhenOffline: result.eqDisabledWhenOffline,
     slowDump: result.slowDump, slowIdle: result.slowIdle, slowGainLowered: result.slowGainLowered, slowFreqUnchanged: result.slowFreqUnchanged,
     slowNoMismatch: result.slowMismatches === 0, slowUiMatchesStore: result.slowUiMatchesStore,
+    phaseInverted: result.phaseInverted, phaseRestored: result.phaseRestored, levelWritten: result.levelWritten, delayWritten: result.delayWritten,
+    delayStepped: result.delayStepped, inputWritten: result.inputWritten, tabsOnTop: result.tabsOnTop,
+    otherLayerWarned: result.otherLayerWarned, otherLayerZeroed: result.otherLayerZeroed,
+    modeSwitched: result.modeSwitched, modeActive2: result.modeActive2, modeEqFlat: result.modeEqFlat,
+    modeUnsavedTracked: result.unsavedBefore > 0 && result.unsavedAfter === 0, modeSaved: result.modeSaved, slotSaved: result.slotSaved,
   };
   console.log(JSON.stringify({ result, errors, checks }, null, 1));
   const failed = Object.entries(checks).filter(([, v]) => !v).map(([k]) => k);

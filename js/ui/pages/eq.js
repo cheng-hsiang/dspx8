@@ -1,4 +1,4 @@
-import { LAYERS, layerInfo, readBands, bandWritePairs, presetWritePairs, resetChannelPairs, copyChannelPairs, effectiveQScale, describeQScale, nearest, Q_MIN, Q_MAX } from '../../eq/model.js';
+import { LAYERS, layerInfo, readBands, bandWritePairs, presetWritePairs, resetChannelPairs, copyChannelPairs, effectiveQScale, describeQScale, nearest, otherLayer, nonFlatBands, flattenPairs, Q_MIN, Q_MAX } from '../../eq/model.js';
 import { loadBundledPresets, localPresets, validatePreset, PRESET_SCHEMA } from '../../eq/presets.js';
 import { createCurve } from '../components/curve.js';
 import { toast, confirmDialog } from '../components/dialog.js';
@@ -36,6 +36,7 @@ export function init(ctx, el) {
         <span id="eq-qinfo" class="muted"></span>
         <span id="eq-bypass" class="muted"></span>
       </div>
+      <div class="row" id="eq-other" hidden style="margin-top:8px"><span class="warn" id="eq-other-text"></span><button id="eq-other-zero">歸零另一層增益</button></div>
     </div>
     <div class="card">
       <canvas id="eq-curve" class="eq-canvas"></canvas>
@@ -178,7 +179,22 @@ export function init(ctx, el) {
   }
   function currentPreset() { const v = $('#eq-preset').value || ''; const [k, name] = [v.slice(0, 1), v.slice(2)]; return (k === 'b' ? st.bundled : st.local).find((p) => p.name === name) ?? null; }
   function renderPresetDesc() { const p = currentPreset(); $('#eq-preset-desc').textContent = p ? `${p.description ?? ''}${p.levelDb ? `　後聲道建議比前聲道 ${p.levelDb.rear} dB（聲音頁手動調）。` : ''}${p.sub ? `　重低音本體：低通 ${p.sub.lpfHz} Hz，增益${p.sub.gain}，相位${p.sub.phase}。` : ''}` : ''; }
-  function renderAll() { renderChips(); renderCurve(); renderControls(); renderTable(); }
+  /** The layer not being edited still runs; a curve left there (e.g. the 10-band layer from an older session) stacks onto this one. */
+  const otherHits = () => nonFlatBands(store, otherLayer(st.layer), Array.from(new Set(Object.values(st.groups).flatMap((g) => g.channels))));
+  function renderOther() {
+    const hits = otherHits();
+    $('#eq-other').hidden = hits.length === 0;
+    if (hits.length) $('#eq-other-text').textContent = `另一層「${layerInfo(otherLayer(st.layer)).label}」有 ${hits.length} 個頻段不是 0 dB，會和這層疊加影響聲音。`;
+    $('#eq-other-zero').disabled = !canEdit();
+  }
+  async function zeroOtherLayer({ confirm = true } = {}) {
+    const hits = otherHits();
+    if (!hits.length) return true;
+    if (confirm && !(await confirmDialog(`把「${layerInfo(otherLayer(st.layer)).label}」上 ${hits.length} 個頻段的增益歸零？頻率與 Q 不變。`))) return false;
+    return writeNow(flattenPairs(hits), '歸零另一層');
+  }
+  $('#eq-other-zero').addEventListener('click', () => zeroOtherLayer());
+  function renderAll() { renderChips(); renderCurve(); renderControls(); renderTable(); renderOther(); }
 
   $('#eq-layer').addEventListener('change', (e) => { st.layer = e.target.value; st.band = 0; storage.put('settings', 'eqLayer', st.layer).catch(() => {}); renderAll(); });
   $('#eq-qmode').addEventListener('change', (e) => { st.qMode = e.target.value; storage.put('settings', 'eqQMode', st.qMode).catch(() => {}); renderAll(); });
@@ -233,7 +249,7 @@ export function init(ctx, el) {
     if (el.hidden || raf) return;
     if (addrs.length < 200 && !addrs.some(inBandRange)) return; // heartbeat reads never touch EQ registers
     raf = true;
-    requestAnimationFrame(() => { raf = false; if (curve.dragging) { renderTable(); return; } renderCurve(); renderControls(); renderTable(); });
+    requestAnimationFrame(() => { raf = false; if (curve.dragging) { renderTable(); return; } renderCurve(); renderControls(); renderTable(); renderOther(); });
   });
   device.on('state', () => { if (device.state === 'disconnected') { sent.clear(); pending.clear(); touched.clear(); } renderAll(); });
   device.on('dump', () => { sent.clear(); if (!el.hidden) renderAll(); });
@@ -257,6 +273,7 @@ export function init(ctx, el) {
     select: (sel) => { st.sel = sel; renderAll(); },
     pointOf: (i) => curve.pointOf(i),
     idle: () => pending.size === 0 && !writeTimer && outstanding.size === 0 && sent.size === 0,
+    zeroOtherLayer,
     state: st,
   };
   renderAll();

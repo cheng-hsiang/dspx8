@@ -59,3 +59,12 @@ test('delay: raw is microseconds, 48 kHz samples, 346 m/s', () => {
   assert.equal(c.samplesToDelayRaw(960), 20000);
   assert.equal(c.delayRawToSamples(1000), 48);
 });
+
+test('Q display: raw is hundredths of Q divided by the OEM QRATE (factory raw 240 shows as Q 7.6)', () => {
+  assert.equal(c.QRATE, 7.6 / 2.4);
+  assert.ok(Math.abs(c.rawToQ(240) - 7.6) < 1e-9);
+  assert.equal(c.qToRaw(1.0), 32);
+  assert.equal(c.qToRaw(7.6), 240);
+  assert.equal(c.describeQ(240), '7.6');
+  assert.equal(c.describeQ(32), '1.01');
+});

@@ -1,11 +1,12 @@
 import { Queue, TimeoutError } from './queue.js';
 import { STATUS } from './store.js';
 import * as cmd from '../protocol/commands.js';
-import { ADDR, DUMP_END, HEARTBEAT_ADDRS, isTypeAddr, isWritableAddr, eqAddr, describeAddr } from '../protocol/addrmap.js';
+import { ADDR, DUMP_END, MODE_END, HEARTBEAT_ADDRS, isTypeAddr, isWritableAddr, eqAddr, describeAddr } from '../protocol/addrmap.js';
+import { errText } from '../util/errors.js';
 import { encodeGain } from '../protocol/codec.js';
 import { CUSTOMER_ID } from '../protocol/tables.js';
 
-export const STATE = Object.freeze({ DISCONNECTED: 'disconnected', CONNECTING: 'connecting', CONNECTED: 'connected', READONLY: 'readonly' });
+export const STATE = Object.freeze({ DISCONNECTED: 'disconnected', CONNECTING: 'connecting', CONNECTED: 'connected', READONLY: 'readonly', SWITCHING: 'switching' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class Device {
@@ -23,6 +24,7 @@ export class Device {
     this.heartbeatTimer = null;
     this.heartbeatBusy = false;
     this.lastMode = null;
+    this.modeBaseline = null; // mode region as last read from (or saved to) the device; edits since then are unsaved
     this.listeners = new Map();
     transport.onDisconnect(() => this.#onTransportLost());
   }
@@ -53,10 +55,11 @@ export class Device {
       await this.dump();
       this.startHeartbeat();
     } catch (err) {
-      this.log.error(`連線失敗：${err.message}`);
-      this.#emit('error', err);
+      const e = err instanceof Error ? err : new Error(errText(err));
+      this.log.error(`連線失敗：${errText(err)}`);
+      this.#emit('error', e);
       await this.disconnect();
-      throw err;
+      throw e;
     }
   }
 
@@ -112,6 +115,7 @@ export class Device {
     info.ms = Date.now() - t0;
     this.dumpInfo = info;
     this.lastMode = this.store.get(ADDR.M0_MODE);
+    this.modeBaseline = this.store.values.slice(0, MODE_END);
     this.log.info(`整機讀取${info.complete ? '完成' : '不完整'}：${info.ms} ms，方式 ${info.method}${info.failedSegments.length ? '，失敗區段 ' + info.failedSegments.join(',') : ''}`);
     this.#emit('dump', info);
     if (info.complete) this.#emit('snapshot', this.store.snapshot());
@@ -135,7 +139,7 @@ export class Device {
   }
 
   async writeRegs(pairs) {
-    if (!this.canWrite) throw new Error('readonly: writes are disabled');
+    if (!this.canWrite) throw new Error(this.state === STATE.SWITCHING ? 'switching mode: writes are locked' : 'readonly: writes are disabled');
     for (const { addr, val } of pairs) {
       if (!Number.isInteger(addr) || addr < 0 || addr > DUMP_END) throw new RangeError(`address out of range: ${addr}`);
       if (isTypeAddr(addr)) throw new RangeError(`refusing to write TYPE field ${describeAddr(addr)}`);
@@ -194,18 +198,44 @@ export class Device {
     return { addr, name, before, sent, readBack, ok, ms };
   }
 
-  async callMode(n) {
-    if (!this.canWrite) throw new Error('readonly: writes are disabled');
-    await this.#requireQueue().send(cmd.callModePacket(n));
-    this.log.info(`已呼叫模式 ${n}，${this.modeReloadDelayMs} ms 後重新讀取`);
-    await sleep(this.modeReloadDelayMs);
-    await this.dump();
+  /** Mode-region registers (0..1225) that differ from what the device last loaded or saved, i.e. edits a power cycle may lose. */
+  unsavedChanges() {
+    if (!this.modeBaseline) return [];
+    const out = [];
+    for (let a = 0; a < MODE_END; a++) if (this.store.values[a] !== this.modeBaseline[a]) out.push(a);
+    return out;
   }
 
+  /** Load slot n into the working memory. Writes are locked and the heartbeat paused until the re-read is done. */
+  async callMode(n) {
+    if (!this.canWrite) throw new Error('readonly: writes are disabled');
+    const q = this.#requireQueue();
+    this.stopHeartbeat();
+    this.#setState(STATE.SWITCHING);
+    try {
+      await q.send(cmd.callModePacket(n));
+      this.log.info(`已呼叫模式 ${n}，${this.modeReloadDelayMs} ms 後重新讀取`);
+      await sleep(this.modeReloadDelayMs);
+      await this.dump();
+      const mode = this.store.get(ADDR.M0_MODE);
+      if (mode !== n) this.log.warn(`機器回報目前模式 ${mode}，不是要求的 ${n}`);
+      this.lastMode = mode;
+      this.#emit('mode', mode);
+    } finally {
+      if (this.state === STATE.SWITCHING) this.#setState(STATE.CONNECTED);
+      if (this.queue) this.startHeartbeat();
+    }
+  }
+
+  /** Store the working memory into slot n. Like the OEM app this is normally the current mode. */
   async saveMode(n) {
     if (!this.canWrite) throw new Error('readonly: writes are disabled');
-    await this.#requireQueue().send(cmd.saveModePacket(n));
-    this.log.info(`已儲存到模式 ${n}`);
+    const res = await this.#requireQueue().send(cmd.saveModePacket(n));
+    const ack = res.parsed?.mode;
+    const current = this.store.get(ADDR.M0_MODE);
+    this.log.info(`已儲存到模式 ${n}${ack !== undefined && ack !== n ? `（機器回應 ${ack}）` : ''}${n !== current ? `，目前運作中的仍是模式 ${current}` : ''}`);
+    if (n === current) this.modeBaseline = this.store.values.slice(0, MODE_END);
+    this.#emit('saved', n);
   }
 
   startHeartbeat() {

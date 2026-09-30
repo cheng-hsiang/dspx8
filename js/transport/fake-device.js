@@ -105,7 +105,10 @@ export class FakeDevice {
         return buildFrame(cmd, out);
       }
       case CMD.WRITE:
-        for (const { addr, val } of parsed.pairs) if (addr < REG_COUNT) this.regs[addr] = val;
+        for (const { addr, val } of parsed.pairs) {
+          if (addr < REG_COUNT) this.regs[addr] = val;
+          if (addr === ADDR.M0_INPUT_SET) this.regs[ADDR.M0_INPUT_CUR] = 0x10 | (val & 0x0F); // the unit reports the selected input in M0_22
+        }
         return frame.slice();
       case CMD.UPLOAD_SECT: {
         if (this.failSect) return null;

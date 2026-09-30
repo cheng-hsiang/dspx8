@@ -2,6 +2,7 @@ import { STATE } from '../../core/device.js';
 import { buildReport } from '../../core/report.js';
 import { ADDR } from '../../protocol/addrmap.js';
 import { toast, confirmDialog } from '../components/dialog.js';
+import { errText } from '../../util/errors.js';
 import { renderRegTable } from '../components/regtable.js';
 
 function download(filename, text, type = 'application/json') {
@@ -61,7 +62,7 @@ export function init(ctx, el) {
   $('#bt-connect').addEventListener('click', async () => {
     const origConnect = device.transport.connect.bind(device.transport);
     device.transport.connect = () => origConnect({ acceptAll: !$('#bt-filter').checked });
-    try { await device.connect(); } catch (err) { toast(`連線失敗：${err.message}`); } finally { device.transport.connect = origConnect; }
+    try { await device.connect(); } catch (err) { toast(`連線失敗：${errText(err)}`); } finally { device.transport.connect = origConnect; }
   });
   $('#bt-disconnect').addEventListener('click', () => device.disconnect());
   $('#bt-redump').addEventListener('click', async (e) => { e.target.disabled = true; try { await device.dump(); } catch (err) { toast(err.message); } finally { renderState(); } });

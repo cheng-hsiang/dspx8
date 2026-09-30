@@ -1,4 +1,5 @@
 import { TransportError } from './transport.js';
+import { errText } from '../util/errors.js';
 
 export const uuid16 = (n) => `0000${n.toString(16).padStart(4, '0')}-0000-1000-8000-00805f9b34fb`;
 export const SERVICE_UUID = uuid16(0xae00);
@@ -59,7 +60,8 @@ export class BleTransport {
       ? { acceptAllDevices: true, optionalServices: [SERVICE_UUID] }
       : { filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] };
     this.log?.info(`requestDevice ${acceptAll ? '（接受所有裝置）' : '（過濾 service ae00）'}`);
-    this.device = device ?? await this.bluetooth.requestDevice(options);
+    try { this.device = device ?? await this.bluetooth.requestDevice(options); }
+    catch (err) { throw new TransportError(`沒有選到裝置（選擇視窗被關閉或找不到裝置：${errText(err)}）`, 'NO_DEVICE'); }
     this.name = this.device.name || this.device.id || '(未命名)';
     this.log?.info(`選擇裝置：${this.name}`);
     try {

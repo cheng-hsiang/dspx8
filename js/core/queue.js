@@ -73,7 +73,11 @@ export class Queue {
     if (!cur) return;
     cur.attempts++;
     cur.timedOut = false;
-    if (cur.attempts > 1) { this.stats.resent++; this.log.warn(`逾時重送 (${cur.attempts - 1}/${this.retries})`); } else this.stats.sent++;
+    if (cur.attempts > 1) {
+      this.stats.resent++;
+      const msg = `逾時重送 (${cur.attempts - 1}/${this.retries})`;
+      if (cur.quiet) this.log.debug(msg); else this.log.warn(msg); // a lost heartbeat is routine on an idle BLE link
+    } else this.stats.sent++;
     this.log.tx(cur.frame, { quiet: cur.quiet });
     cur.timer = setTimeout(() => this.#onTimeout(), this.timeoutMs);
     cur.writing = true;

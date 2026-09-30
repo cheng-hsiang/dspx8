@@ -43,3 +43,9 @@ test('report without writeTest says so and lists failed segments', () => {
   assert.ok(text.includes('失敗區段: 300, 400'));
   assert.ok(text.includes('寫入測試: 未執行'));
 });
+
+test('filter lines show Q with the OEM conversion, consistent with the Q inference line', () => {
+  const text = buildReport({ env, info, dumpInfo, store: seededStore() });
+  assert.ok(text.includes('CH1 EQ1: TYPE=7 F=32969 (20.1 Hz) G=500 (0.0 dB) Q=240 (Q 7.6)'), text);
+  assert.ok(!text.includes('(Q 2.4)'));
+});
