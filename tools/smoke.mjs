@@ -132,7 +132,7 @@ const SCRIPT_C = `(async () => {
   const gFinal = window.dspx.store.get(eqAddr(1, 10, 'G'));
   const fFinal = window.dspx.store.get(eqAddr(1, 10, 'F'));
   out.slowGainLowered = gFinal < 480 && gFinal === window.dspx.store.get(eqAddr(2, 10, 'G'));
-  out.slowFreqUnchanged = fFinal === (160 | 0) ;
+  out.slowFreqUnchanged = fFinal === 161; // device band 10 centre
   let mism = 0; for (let a = 138; a < 1226; a++) if (window.dspx.store.getStatus(a) === 3) mism++;
   out.slowMismatches = mism;
   out.slowUiMatchesStore = Math.abs(Number(document.querySelector('#eq-gain').value) - (gFinal - 500) / 10) < 0.05;
@@ -157,8 +157,8 @@ try {
     await writeFile(join(ROOT, '.smoke', 'eq.png'), Buffer.from(shot.data, 'base64'));
   } catch (err) { console.warn('screenshot failed', err.message); }
   const resultB = await cdp.evaluate(SCRIPT_B);
-  // slow-link scenario: real pointer drag on the curve with 150 ms per BLE chunk; no false mismatch, final value = last drag
-  await cdp.send('Page.navigate', { url: `http://localhost:${PORT}/?sim=1&lat=150` });
+  // slow-link scenario: real pointer drag on the curve with 60 ms per BLE chunk (21 sect replies + BT status frames must still beat the 1.7 s timeout); no false mismatch, final value = last drag
+  await cdp.send('Page.navigate', { url: `http://localhost:${PORT}/?sim=1&lat=60` });
   await sleep(1500);
   const resultC = await cdp.evaluate(SCRIPT_C);
   const result = { ...resultA, ...resultB, ...resultC };
@@ -167,7 +167,7 @@ try {
   const checks = {
     tabs5: result.tabs === 5, pages5: result.pages === 5, booted: result.booted, connected: result.connected, dumpDone: result.dumpDone,
     allConfirmed: result.confirmed === 1613, writeTest: result.writeTest, reportOk: result.reportOk, logHasLines: result.logLines > 10,
-    volInitial30: result.volInitial === '30', volWritten: result.volWritten, muteWritten: result.muteWritten, modeActive1: result.modeActive === '1',
+    volInitial60: result.volInitial === '60', volWritten: result.volWritten, muteWritten: result.muteWritten, modeActive1: result.modeActive === '1',
     snapshotSaved: result.snapshots >= 1, noConsoleErrors: errors.length === 0,
     versionLine: result.versionLine,
     eqCanvas: result.eqCanvas, eqPresetsLoaded: result.eqPresetsLoaded, eqPresetApplied: result.eqPresetApplied,

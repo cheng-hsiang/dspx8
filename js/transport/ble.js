@@ -52,7 +52,8 @@ export class BleTransport {
   onData(cb) { this.dataCbs.push(cb); }
   onDisconnect(cb) { this.disconnectCbs.push(cb); }
 
-  async connect({ acceptAll = false, device = null } = {}) {
+  // Real unit (BLE name Mango3.0) does not advertise service ae00, so the default is to list every device.
+  async connect({ acceptAll = true, device = null } = {}) {
     if (!this.bluetooth) throw new TransportError('此瀏覽器不支援 Web Bluetooth', 'UNSUPPORTED');
     const options = acceptAll
       ? { acceptAllDevices: true, optionalServices: [SERVICE_UUID] }

@@ -36,7 +36,7 @@ export function init(ctx, el) {
         <button id="log-restore">載入上次日誌</button>
       </div>
       <div class="row" style="margin-top:8px">
-        <label>顯示 <select id="log-filter"><option value="all">全部</option><option value="important">重點</option><option value="packets">只看封包</option></select></label>
+        <label>顯示 <select id="log-filter"><option value="normal" selected>一般（不含心跳）</option><option value="important">重點</option><option value="packets">只看封包</option><option value="all">全部（含心跳與狀態封包）</option></select></label>
         <label><input type="checkbox" id="log-auto" checked> 自動捲動</label>
         <span id="log-count" class="muted"></span>
       </div>
@@ -45,8 +45,8 @@ export function init(ctx, el) {
     <div id="log-view" class="log mono"></div>`;
   const $ = (id) => el.querySelector(id);
   const view = $('#log-view');
-  let filter = 'all';
-  const keep = (e) => filter === 'all' || (filter === 'important' ? IMPORTANT.has(e.level) : PACKETS.has(e.level));
+  let filter = 'normal';
+  const keep = (e) => filter === 'all' || (filter === 'normal' ? e.level !== 'DEBUG' : filter === 'important' ? IMPORTANT.has(e.level) : PACKETS.has(e.level));
 
   const line = (e) => { const d = document.createElement('div'); d.className = `l-${e.level}`; d.textContent = Logger.formatEntry(e); return d; };
   const renderAll = () => {

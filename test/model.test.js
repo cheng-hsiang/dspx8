@@ -25,35 +25,33 @@ test('layers and addresses', () => {
 
 test('readBands decodes and flags disabled slots', () => {
   const s = seeded();
-  const bands = m.readBands(s, { layer: m.LAYERS.MODE, ch: 1, qScale: 1 });
+  const bands = m.readBands(s, { layer: m.LAYERS.MODE, ch: 1, qScale: m.QRATE });
   assert.equal(bands.length, 31);
   assert.equal(bands[0].band, 1);
-  assert.equal(bands[0].f, 20); assert.equal(bands[0].g, 0); assert.equal(bands[0].q, 4.32); assert.equal(bands[0].enabled, true);
+  assert.equal(bands[0].f, 20.1); assert.equal(bands[0].g, 0); assert.ok(Math.abs(bands[0].q - 7.6) < 0.01); assert.equal(bands[0].enabled, true);
   const all = m.readBands(s, { layer: m.LAYERS.MODE, ch: 1, qScale: 1, slots: 32 });
-  assert.equal(all[31].enabled, false);
+  assert.equal(all[31].enabled, true); // real device: slot 32 is 20 kHz, Q raw 400
+  assert.equal(all[31].f, 20000);
   const app = m.readBands(s, { layer: m.LAYERS.APP, ch: 1, qScale: m.QRATE });
   assert.equal(app.length, 10);
-  assert.equal(app[0].f, 60); assert.equal(app[4].enabled, false);
-  assert.ok(Math.abs(app[0].q - 0.38) < 0.01);
+  assert.equal(app[0].f, 60); assert.equal(app[4].enabled, true); assert.equal(app[4].f, 250);
+  assert.ok(Math.abs(app[0].q - 3.77) < 0.01);
 });
 
-test('effectiveQScale: OEM layer is always QRATE unless forced to 1; mode layer follows inference with fallback 1', () => {
-  assert.equal(m.effectiveQScale(m.LAYERS.APP, 'auto', null), m.QRATE);
-  assert.equal(m.effectiveQScale(m.LAYERS.APP, 'auto', 1), m.QRATE);
-  assert.equal(m.effectiveQScale(m.LAYERS.APP, 'qrate', 1), m.QRATE);
-  assert.equal(m.effectiveQScale(m.LAYERS.APP, '1', null), 1);
-  assert.equal(m.effectiveQScale(m.LAYERS.MODE, 'auto', null), 1);
-  assert.equal(m.effectiveQScale(m.LAYERS.MODE, 'auto', m.QRATE), m.QRATE);
-  assert.equal(m.effectiveQScale(m.LAYERS.MODE, 'qrate', null), m.QRATE);
-  assert.equal(m.effectiveQScale(m.LAYERS.MODE, '1', m.QRATE), 1);
+test('effectiveQScale: both layers default to the OEM QRATE (device default raw 240 = Q 7.6); only an explicit 1 overrides', () => {
+  assert.equal(m.effectiveQScale(m.LAYERS.APP, 'auto'), m.QRATE);
+  assert.equal(m.effectiveQScale(m.LAYERS.APP, 'qrate'), m.QRATE);
+  assert.equal(m.effectiveQScale(m.LAYERS.APP, '1'), 1);
+  assert.equal(m.effectiveQScale(m.LAYERS.MODE, 'auto'), m.QRATE);
+  assert.equal(m.effectiveQScale(m.LAYERS.MODE, 'qrate'), m.QRATE);
+  assert.equal(m.effectiveQScale(m.LAYERS.MODE, '1'), 1);
 });
 
-test('describeQScale labels the three states', () => {
-  assert.equal(m.describeQScale(m.LAYERS.APP, 'auto', null), '原廠層 ×3.17（已知）');
-  assert.equal(m.describeQScale(m.LAYERS.MODE, 'auto', null), '自動：未確認，暫用 1');
-  assert.equal(m.describeQScale(m.LAYERS.MODE, 'auto', 1), '自動：1');
-  assert.equal(m.describeQScale(m.LAYERS.MODE, 'auto', m.QRATE), '自動：×3.17');
-  assert.equal(m.describeQScale(m.LAYERS.MODE, 'qrate', null), '手動：×3.17');
+test('describeQScale labels the states', () => {
+  assert.equal(m.describeQScale(m.LAYERS.APP, 'auto'), '×3.17（原廠換算）');
+  assert.equal(m.describeQScale(m.LAYERS.MODE, 'auto'), '×3.17（原廠換算）');
+  assert.equal(m.describeQScale(m.LAYERS.MODE, 'qrate'), '手動：×3.17');
+  assert.equal(m.describeQScale(m.LAYERS.MODE, '1'), '手動：1');
 });
 
 test('inferQScale maps the report verdicts to a scale or null', () => {
@@ -91,10 +89,10 @@ test('mapPresetToBands picks nearest unused enabled band; collisions go to the n
   const s = seeded();
   const bands = m.readBands(s, { layer: m.LAYERS.MODE, ch: 1, qScale: 1 });
   const r = m.mapPresetToBands([{ f: 1000, g: 1, q: 1 }, { f: 1010, g: 2, q: 1 }, { f: 50, g: 3, q: 1 }], bands);
-  assert.deepEqual(r.mapped.map((x) => x.band), [18, 19, 5]);
+  assert.deepEqual(r.mapped.map((x) => x.band), [18, 19, 5]); // 1000 -> band 18; 1010 -> next nearest 1260 (band 19); 50 -> 50.6 (band 5)
   assert.deepEqual(r.dropped, []);
   const tiny = bands.slice(0, 1);
-  const r2 = m.mapPresetToBands([{ f: 20, g: 1, q: 1 }, { f: 25, g: 1, q: 1 }], tiny);
+  const r2 = m.mapPresetToBands([{ f: 20.1, g: 1, q: 1 }, { f: 25, g: 1, q: 1 }], tiny);
   assert.equal(r2.mapped.length, 1);
   assert.deepEqual(r2.dropped.map((d) => d.f), [25]);
 });
@@ -121,5 +119,5 @@ test('reset and copy helpers', () => {
   const copy = m.copyChannelPairs(m.LAYERS.MODE, 1, [3], s);
   assert.ok(copy.some((p) => p.addr === eqAddr(3, 2, 'G') && p.val === 530));
   assert.ok(!copy.some((p) => p.addr === eqAddr(3, 2, 'TYPE')));
-  assert.ok(!copy.some((p) => p.addr === eqAddr(3, 32, 'G')), 'disabled slot 32 is not copied');
+  assert.ok(!copy.some((p) => p.addr === eqAddr(3, 32, 'G')), 'slot 32 is outside the 31 shown bands and is not copied');
 });

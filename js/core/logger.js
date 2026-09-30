@@ -1,6 +1,6 @@
 import { summarizeFrame } from '../protocol/summary.js';
 
-export const LEVELS = ['INFO', 'WARN', 'ERR', 'TX', 'RX', 'REPORT'];
+export const LEVELS = ['INFO', 'WARN', 'ERR', 'TX', 'RX', 'REPORT', 'DEBUG'];
 const IMPORTANT = new Set(['INFO', 'WARN', 'ERR', 'REPORT']);
 const PACKETS = new Set(['TX', 'RX']);
 
@@ -35,8 +35,10 @@ export class Logger {
   warn(text) { return this.#add('WARN', String(text)); }
   error(text) { return this.#add('ERR', String(text)); }
   report(text) { return this.#add('REPORT', String(text)); }
-  tx(frame) { return this.#add('TX', summarizeFrame(frame, 'tx'), toHex(frame)); }
-  rx(frame) { return this.#add('RX', summarizeFrame(frame, 'rx'), toHex(frame)); }
+  tx(frame, { quiet = false } = {}) { return this.#add(quiet ? 'DEBUG' : 'TX', summarizeFrame(frame, 'tx'), toHex(frame)); }
+  rx(frame, { quiet = false } = {}) { return this.#add(quiet ? 'DEBUG' : 'RX', summarizeFrame(frame, 'rx'), toHex(frame)); }
+  /** Chatter that only matters when digging: heartbeats, BT status frames. Hidden from every filter except 'all'. */
+  debug(text, hex) { return this.#add('DEBUG', String(text), hex); }
 
   subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
 
@@ -60,7 +62,8 @@ export class Logger {
   toText(filter = 'all') {
     const keep = filter === 'important' ? (e) => IMPORTANT.has(e.level)
       : filter === 'packets' ? (e) => PACKETS.has(e.level)
-        : () => true;
+        : filter === 'normal' ? (e) => e.level !== 'DEBUG'
+          : () => true;
     const lines = this.entries.filter(keep).map(Logger.formatEntry);
     if (this.truncated) lines.unshift('（較舊的日誌已因超過上限被丟棄）');
     return lines.join('\n');

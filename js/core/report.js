@@ -5,7 +5,7 @@ export function inferQScale(store) {
   const qRaw = [];
   for (let ch = 1; ch <= CH_COUNT; ch++) qRaw.push(store.get(eqAddr(ch, 1, 'Q')));
   const all = (lo, hi) => qRaw.every((v) => v >= lo && v <= hi);
-  const verdict = all(80, 130) ? 'no-qrate' : all(25, 40) ? 'qrate' : 'unclear';
+  const verdict = all(230, 250) ? 'device-default' : all(80, 130) ? 'no-qrate' : all(25, 40) ? 'qrate' : 'unclear';
   return { qRaw, verdict };
 }
 
@@ -37,11 +37,11 @@ export function buildReport({ env, info, dumpInfo, store, writeTest = null }) {
   for (const b of [1, 2, 3, 32]) L.push(filterLine(store, `CH1 EQ${b}`, eqAddr(1, b, 'TYPE')));
   L.push('');
   const qs = inferQScale(store);
-  L.push(`[Q 推斷] 各聲道 EQ1 Q 原始值: ${qs.qRaw.join(' ')} → ${qs.verdict === 'no-qrate' ? '不套用 QRate（Q = raw/100）' : qs.verdict === 'qrate' ? '疑似套用 QRate' : '無法判定'}`);
+  L.push(`[Q 推斷] 各聲道 EQ1 Q 原始值: ${qs.qRaw.join(' ')} → ${qs.verdict === 'device-default' ? '出廠值 240（原廠換算 = Q 7.6）' : qs.verdict === 'no-qrate' ? '疑似不套用 QRate' : qs.verdict === 'qrate' ? '疑似套用 QRate' : '無法判定'}`);
   L.push('');
   L.push('[MUTE 1..11] ' + rawList(store, range(ADDR.mute(1), ADDR.mute(11))));
   L.push('[MIX11 1..8] ' + rawList(store, range(ADDR.mix11(1), ADDR.mix11(8))) + '  解碼: ' + range(ADDR.mix11(1), ADDR.mix11(8)).map((a) => { const { vol, flag } = decodeVol(store.get(a)); return `${vol}${flag ? '+flag' : ''}`; }).join(' '));
-  L.push('[MIX41 k,1] ' + rawList(store, range(1, 8).map((k) => ADDR.mix41(k, 1))));
+  L.push('[相位載波 26..33] ' + rawList(store, range(1, 8).map((k) => ADDR.phaseOfChannel(k))));
   L.push('[SWITCH21 1..15] ' + rawList(store, range(ADDR.switch21(1), ADDR.switch21(15))));
   L.push('[DELAY 1..9] ' + rawList(store, range(ADDR.delay(1), ADDR.delay(9))));
   L.push('[M0 1..24] ' + rawList(store, range(ADDR.m0(1), ADDR.m0(24))));

@@ -10,7 +10,7 @@ export const CMD = Object.freeze({
 export const CMD_NAMES = Object.freeze(Object.fromEntries(Object.entries(CMD).map(([k, v]) => [v, k])));
 export const WRITE_PAIRS_PER_PACKET = 3;
 export const READ_ADDRS_PER_PACKET = 14;
-export const SECT_SIZE = 100;
+export const SECT_SIZE = 80; // the DSP-X8s answers at most 80 values per UPLOAD_SECT (LEN 0xA5)
 
 function assertMode(n) { if (!Number.isInteger(n) || n < 1 || n > 8) throw new RangeError(`mode ${n}`); }
 function chunk(arr, size) { const out = []; for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size)); return out; }

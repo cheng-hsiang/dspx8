@@ -18,13 +18,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 test('connect: id check, full dump, snapshot, state connected', async () => {
   const { device, store } = make();
   const states = []; device.on('state', (s) => states.push(s));
-  let progress = 0; device.on('progress', (p) => { progress = p.done; assert.equal(p.total, 17); });
+  let progress = 0; device.on('progress', (p) => { progress = p.done; assert.equal(p.total, 21); });
   let snap = null; device.on('snapshot', (s) => { snap = s; });
   await device.connect();
   assert.deepEqual(states, [STATE.CONNECTING, STATE.CONNECTED]);
   assert.equal(device.info.customerId, 4006);
-  assert.equal(device.info.name, 'DSP-X8s-SIM');
-  assert.equal(progress, 17);
+  assert.equal(device.info.name, 'Mango3.0-SIM');
+  assert.equal(progress, 21);
   assert.equal(device.dumpInfo.complete, true);
   assert.equal(device.dumpInfo.method, 'sect');
   assert.equal(store.get(eqAddr(1, 1, 'G')), 500);
@@ -54,12 +54,12 @@ test('TYPE fields, out-of-range and non-allow-listed addresses are refused witho
     await assert.rejects(device.writeRegs([{ addr, val: 1 }]), RangeError, `addr ${addr}`);
   }
   assert.equal(transport.sent.length, sentBefore);
-  await device.writeRegs([{ addr: ADDR.M0_INPUT_SET, val: 7 }, { addr: ADDR.delay(8), val: 100 }, { addr: ADDR.mix41(3, 1), val: 500 }]);
+  await device.writeRegs([{ addr: ADDR.M0_INPUT_SET, val: 7 }, { addr: ADDR.delay(8), val: 100 }, { addr: ADDR.phaseOfChannel(3), val: 500 }]);
   await device.disconnect();
 });
 
 test('a short sect response is completed by plain reads instead of being marked complete', async () => {
-  const { device, store } = make({ sectLimit: 5 });
+  const { device, store } = make({ sectLimit: 5, dupReads: false });
   await device.connect();
   assert.equal(device.dumpInfo.complete, true);
   assert.equal(device.dumpInfo.method, 'mixed');

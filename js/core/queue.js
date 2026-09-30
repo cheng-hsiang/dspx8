@@ -1,5 +1,11 @@
 import { FrameAssembler } from '../protocol/frame.js';
-import { matchesRequest, coalesceKey, parseResponse } from '../protocol/commands.js';
+import { matchesRequest, coalesceKey, parseResponse, CMD } from '../protocol/commands.js';
+
+function sameBytes(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
 
 export class TimeoutError extends Error {
   constructor(message) { super(message); this.name = 'TimeoutError'; }
@@ -16,7 +22,8 @@ export class Queue {
     this.pending = [];        // [{ frame, key, waiters: [{resolve, reject}] }]
     this.current = null;      // in-flight item + { attempts, timer }
     this.consecutiveFailures = 0;
-    this.stats = { sent: 0, acked: 0, resent: 0, timeouts: 0, unsolicited: 0 };
+    this.stats = { sent: 0, acked: 0, resent: 0, timeouts: 0, unsolicited: 0, duplicates: 0, btStatus: 0 };
+    this.lastAck = null; // { bytes, at } — the device repeats every READ reply once; drop the echo silently
     this.unsolicitedCbs = [];
     this.deadCbs = [];
     this.asm = new FrameAssembler();
@@ -28,15 +35,16 @@ export class Queue {
   onUnsolicited(cb) { this.unsolicitedCbs.push(cb); }
   onDead(cb) { this.deadCbs.push(cb); }
 
-  send(frame) {
+  send(frame, { quiet = false } = {}) {
     return new Promise((resolve, reject) => {
       const key = coalesceKey(frame);
       const existing = key ? this.pending.find((p) => p.key === key) : null;
       if (existing) {
         existing.frame = frame;
+        existing.quiet = existing.quiet && quiet;
         existing.waiters.push({ resolve, reject });
       } else {
-        this.pending.push({ frame, key, waiters: [{ resolve, reject }] });
+        this.pending.push({ frame, key, quiet, waiters: [{ resolve, reject }] });
       }
       this.#pump();
     });
@@ -66,7 +74,7 @@ export class Queue {
     cur.attempts++;
     cur.timedOut = false;
     if (cur.attempts > 1) { this.stats.resent++; this.log.warn(`逾時重送 (${cur.attempts - 1}/${this.retries})`); } else this.stats.sent++;
-    this.log.tx(cur.frame);
+    this.log.tx(cur.frame, { quiet: cur.quiet });
     cur.timer = setTimeout(() => this.#onTimeout(), this.timeoutMs);
     cur.writing = true;
     try {
@@ -107,18 +115,29 @@ export class Queue {
   }
 
   #onFrame(frame) {
-    this.log.rx(frame);
     const cur = this.current;
     if (cur && matchesRequest(cur.frame, frame)) {
+      this.log.rx(frame, { quiet: cur.quiet });
       clearTimeout(cur.timer);
       this.current = null;
       this.stats.acked++;
       this.consecutiveFailures = 0;
+      this.lastAck = { bytes: frame, at: Date.now() };
       const data = frame.subarray(3, frame.length - 2);
       this.#settle(cur, { raw: frame, cmd: frame[2], data, parsed: parseResponse({ cmd: frame[2], data }) }, null);
       this.#pump();
       return;
     }
+    if (this.lastAck && Date.now() - this.lastAck.at < 1500 && sameBytes(this.lastAck.bytes, frame)) {
+      this.stats.duplicates++; // the DSP sends every READ reply twice
+      return;
+    }
+    if (frame[2] === CMD.BT_READ) {
+      this.stats.btStatus++; // USB/music status broadcast every ~450 ms
+      this.log.rx(frame, { quiet: true });
+      return;
+    }
+    this.log.rx(frame);
     this.stats.unsolicited++;
     for (const cb of this.unsolicitedCbs) cb(frame);
   }

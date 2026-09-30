@@ -123,11 +123,11 @@ export class Device {
     try { await this.readRegs(addrs); return true; } catch (err) { if (err instanceof TimeoutError) return false; throw err; }
   }
 
-  async readRegs(addrs) {
+  async readRegs(addrs, { quiet = false } = {}) {
     const q = this.#requireQueue();
     const all = [];
     for (const pkt of cmd.readPackets(addrs)) {
-      const res = await q.send(pkt);
+      const res = await q.send(pkt, { quiet });
       this.store.setMany(res.parsed.pairs, STATUS.CONFIRMED);
       all.push(...res.parsed.pairs);
     }
@@ -218,7 +218,7 @@ export class Device {
     if (!this.queue || this.heartbeatBusy || this.queue.pendingCount > 0) return;
     this.heartbeatBusy = true;
     try {
-      await this.readRegs(HEARTBEAT_ADDRS);
+      await this.readRegs(HEARTBEAT_ADDRS, { quiet: true });
       const mode = this.store.get(ADDR.M0_MODE);
       if (this.lastMode !== null && mode !== this.lastMode) {
         this.log.info(`偵測到模式改變 ${this.lastMode} → ${mode}，重新讀取`);

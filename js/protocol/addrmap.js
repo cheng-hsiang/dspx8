@@ -25,7 +25,10 @@ export const ADDR = Object.freeze({
   mute: (n) => { check(n >= 1 && n <= 11, `mute ${n}`); return n; },
   muteOfChannel: (ch) => { check(ch >= 1 && ch <= CH_COUNT, `ch ${ch}`); return ch + 1; },
   mix11: (n) => { check(n >= 1 && n <= 14, `mix11 ${n}`); return 11 + n; },
-  mix41: (k, i) => { check(k >= 1 && k <= 8 && i >= 1 && i <= 4, `mix41 ${k},${i}`); return 26 + (k - 1) * 4 + (i - 1); },
+  /** Routing gain input i (1..4) -> output ch (1..8). Real dump: 26..33 = 600 (input 1 feeds all 8 outputs), rest 0. */
+  mix41: (input, ch) => { check(input >= 1 && input <= 4 && ch >= 1 && ch <= 8, `mix41 ${input},${ch}`); return 26 + (input - 1) * 8 + (ch - 1); },
+  /** The OEM app toggles the phase flag on input 1's gain for the channel: addresses 26..33. */
+  phaseOfChannel: (ch) => { check(ch >= 1 && ch <= CH_COUNT, `ch ${ch}`); return 26 + (ch - 1); },
   switch21: (n) => { check(n >= 1 && n <= 15, `switch21 ${n}`); return 57 + n; },
   EQ_BYPASS_SWITCH: 59,
   delay: (n) => { check(n >= 1 && n <= 9, `delay ${n}`); return 72 + n; },
@@ -79,7 +82,7 @@ export function isWritableAddr(addr) {
   }
   if (addr >= 2 && addr <= 9) return true;                 // MUTE_2..MUTE_9 (CH1..CH8)
   if (addr >= 12 && addr <= 19) return true;               // MIX11_1..8
-  if (addr >= 26 && addr <= 57) return (addr - 26) % 4 === 0; // MIX41_k_1
+  if (addr >= 26 && addr <= 33) return true;                // MIX41 input 1 -> CH1..8 (phase carrier)
   if (addr >= 73 && addr <= 80) return true;               // DELAY_1..8
   if (addr === ADDR.M0_INPUT_SET) return true;
   if (addr >= 1252 && addr <= 1571) return (addr - 1252) % 4 !== FIELD.TYPE; // OEM 10-band layer F/G/Q (the OEM app writes these)
@@ -90,7 +93,7 @@ export function describeAddr(addr) {
   if (addr === 0) return 'MACHINE_TYPE';
   if (addr <= 11) return `MUTE_${addr}`;
   if (addr <= 25) return `MIX11_${addr - 11}`;
-  if (addr <= 57) return `MIX41_${Math.floor((addr - 26) / 4) + 1}_${((addr - 26) % 4) + 1}`;
+  if (addr <= 57) return `MIX41 IN${Math.floor((addr - 26) / 8) + 1} CH${((addr - 26) % 8) + 1}`;
   if (addr <= 72) return `SWITCH21_${addr - 57}`;
   if (addr <= 81) return `DELAY_${addr - 72}`;
   if (addr <= 137) return `COMP${Math.floor((addr - 82) / 7) + 3}_${COMP_PARAMS[(addr - 82) % 7]}`;

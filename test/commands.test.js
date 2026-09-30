@@ -30,9 +30,10 @@ test('writePackets / readPackets chunk by 3 and 14', () => {
   assert.deepEqual(rp.map((f) => parseFrame(f).data.length / 2), [14, 14, 2]);
 });
 
-test('sectPlan covers 0..1612 in 17 requests of 100', () => {
+test('sectPlan covers 0..1612 in 21 requests of 80 (the device answers at most 80 values)', () => {
   const plan = cmd.sectPlan();
-  assert.equal(plan.length, 17);
+  assert.equal(cmd.SECT_SIZE, 80);
+  assert.equal(plan.length, 21);
   assert.equal(plan[0], 0);
   assert.equal(plan.at(-1), 1600);
 });

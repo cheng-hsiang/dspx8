@@ -19,7 +19,7 @@ async function boot() {
   const logger = new Logger();
   const env = detectEnvironment();
   const simLatency = Number(params.get('lat')) || 5; // ?lat=150 simulates a slow BLE link
-  const transport = transportKind === 'sim' ? new FakeDevice({ latencyMs: simLatency }) : new BleTransport({ logger });
+  const transport = transportKind === 'sim' ? new FakeDevice({ latencyMs: simLatency, btStatusMs: 450 }) : new BleTransport({ logger });
   const store = new RegisterStore();
   const storage = await Storage.open();
   const device = new Device({ transport, store, logger });

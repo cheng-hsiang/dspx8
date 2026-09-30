@@ -29,18 +29,16 @@ export function inferQScale(store) {
  * divides by it), so only an explicit '1' overrides it there. The 31-band layer follows the dump inference
  * (cached by the caller once per dump) and falls back to 1 when it could not be inferred.
  */
-export function effectiveQScale(layer, qMode, inferred) {
-  if (layer === LAYERS.APP) return qMode === '1' ? 1 : QRATE;
-  if (qMode === '1') return 1;
-  if (qMode === 'qrate') return QRATE;
-  return inferred ?? 1;
+export function effectiveQScale(layer, qMode) {
+  // Real device: the 31-band layer's factory Q raw is 240 and the OEM constant is literally 7.6 / 2.4,
+  // i.e. the OEM authors calibrated raw 240 = Q 7.6. Both layers therefore use QRATE unless forced to 1.
+  return qMode === '1' ? 1 : QRATE;
 }
 
-export function describeQScale(layer, qMode, inferred) {
-  if (layer === LAYERS.APP && qMode !== '1') return '原廠層 ×3.17（已知）';
+export function describeQScale(layer, qMode) {
   if (qMode === '1') return '手動：1';
   if (qMode === 'qrate') return '手動：×3.17';
-  return inferred === null || inferred === undefined ? '自動：未確認，暫用 1' : inferred === 1 ? '自動：1' : '自動：×3.17';
+  return '×3.17（原廠換算）';
 }
 
 export function nearest(table, v) {

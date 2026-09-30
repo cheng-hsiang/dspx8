@@ -39,14 +39,14 @@ test('isWritableAddr allows only EQ F/G/Q and the listed sound registers', () =>
   for (let ch = 1; ch <= 8; ch++) {
     assert.equal(a.isWritableAddr(a.ADDR.muteOfChannel(ch)), true);
     assert.equal(a.isWritableAddr(a.ADDR.mix11(ch)), true);
-    assert.equal(a.isWritableAddr(a.ADDR.mix41(ch, 1)), true);
+    assert.equal(a.isWritableAddr(a.ADDR.phaseOfChannel(ch)), true);
     assert.equal(a.isWritableAddr(a.ADDR.delay(ch)), true);
   }
   assert.equal(a.isWritableAddr(a.ADDR.M0_INPUT_SET), true);
   for (const f of ['F', 'G', 'Q']) assert.equal(a.isWritableAddr(a.ADDR.iir100(1, 1, f)), true, `app layer ${f}`);
   assert.equal(a.isWritableAddr(a.ADDR.iir100(8, 10, 'Q')), true);
   assert.equal(a.isWritableAddr(a.ADDR.iir100(8, 10, 'TYPE')), false);
-  for (const bad of [0, a.ADDR.mute(1), a.ADDR.mute(10), a.ADDR.mix11(9), a.ADDR.mix41(1, 2), a.ADDR.switch21(2), a.ADDR.delay(9), a.ADDR.compressor(3, 0), a.MODE_END, a.ADDR.M0_MODE, a.ADDR.M0_INPUT_CUR, a.ADDR.iir100(1, 1, 'TYPE'), 1572, a.ADDR.USB_L_VOL, a.ADDR.APP_END, 1613, 5000, -1]) {
+  for (const bad of [0, a.ADDR.mute(1), a.ADDR.mute(10), a.ADDR.mix11(9), a.ADDR.mix41(2, 1), a.ADDR.mix41(4, 8), a.ADDR.switch21(2), a.ADDR.delay(9), a.ADDR.compressor(3, 0), a.MODE_END, a.ADDR.M0_MODE, a.ADDR.M0_INPUT_CUR, a.ADDR.iir100(1, 1, 'TYPE'), 1572, a.ADDR.USB_L_VOL, a.ADDR.APP_END, 1613, 5000, -1]) {
     assert.equal(a.isWritableAddr(bad), false, `addr ${bad} should be refused`);
   }
 });
@@ -56,8 +56,11 @@ test('named registers', () => {
   assert.equal(a.ADDR.muteOfChannel(1), 2);
   assert.equal(a.ADDR.mix11(1), 12);
   assert.equal(a.ADDR.mix11(8), 19);
-  assert.equal(a.ADDR.mix41(1, 1), 26);
-  assert.equal(a.ADDR.mix41(8, 4), 57);
+  assert.equal(a.ADDR.mix41(1, 1), 26);   // input 1 -> CH1
+  assert.equal(a.ADDR.mix41(1, 8), 33);   // input 1 -> CH8
+  assert.equal(a.ADDR.mix41(4, 8), 57);
+  assert.equal(a.ADDR.phaseOfChannel(1), 26);
+  assert.equal(a.ADDR.phaseOfChannel(8), 33);
   assert.equal(a.ADDR.switch21(2), 59);
   assert.equal(a.ADDR.EQ_BYPASS_SWITCH, 59);
   assert.equal(a.ADDR.delay(1), 73);
@@ -79,7 +82,8 @@ test('describeAddr names every region', () => {
   assert.equal(a.describeAddr(0), 'MACHINE_TYPE');
   assert.equal(a.describeAddr(2), 'MUTE_2');
   assert.equal(a.describeAddr(12), 'MIX11_1');
-  assert.equal(a.describeAddr(30), 'MIX41_2_1');
+  assert.equal(a.describeAddr(30), 'MIX41 IN1 CH5');
+  assert.equal(a.describeAddr(34), 'MIX41 IN2 CH1');
   assert.equal(a.describeAddr(59), 'SWITCH21_2');
   assert.equal(a.describeAddr(73), 'DELAY_1');
   assert.equal(a.describeAddr(83), 'COMP3_RATIO');

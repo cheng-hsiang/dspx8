@@ -19,7 +19,8 @@ export function init(ctx, el) {
     ${env.webBluetooth || ctx.transportKind === 'sim' ? '' : '<div class="banner warn">此瀏覽器不支援 Web Bluetooth。Android 請用 Chrome 或 Edge，iPhone 請安裝 Bluefy 瀏覽器開啟本頁。</div>'}
     <div class="card"><h3>連線</h3>
       <div class="row"><button id="bt-connect" class="primary">連線</button><button id="bt-disconnect" disabled>斷線</button>
-        <label><input type="checkbox" id="bt-acceptall"> 找不到裝置時接受所有裝置</label></div>
+        <label><input type="checkbox" id="bt-filter"> 只列出有 ae00 服務的裝置（機器通常不會出現）</label></div>
+      <p class="muted">機器在清單裡的名稱是 Mango3.0。原廠 App 連著時要先關掉。</p>
       <p id="bt-status" class="muted">未連線</p></div>
     <div class="card"><h3>整機讀取</h3>
       <progress id="bt-progress" max="17" value="0"></progress>
@@ -59,7 +60,7 @@ export function init(ctx, el) {
 
   $('#bt-connect').addEventListener('click', async () => {
     const origConnect = device.transport.connect.bind(device.transport);
-    device.transport.connect = () => origConnect({ acceptAll: $('#bt-acceptall').checked });
+    device.transport.connect = () => origConnect({ acceptAll: !$('#bt-filter').checked });
     try { await device.connect(); } catch (err) { toast(`連線失敗：${err.message}`); } finally { device.transport.connect = origConnect; }
   });
   $('#bt-disconnect').addEventListener('click', () => device.disconnect());

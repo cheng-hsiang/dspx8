@@ -77,17 +77,18 @@ test('a dropped first attempt is recovered by the resend', async () => {
   assert.equal(dev.sent.length, 2);
 });
 
-test('unsolicited frames are reported and do not ack the in-flight request', async () => {
-  const { q, dev } = await setup({ latencyMs: 5 });
+test('unsolicited frames are reported and do not ack the in-flight request; BT status frames are only counted', async () => {
+  const { q, dev } = await setup({ latencyMs: 5, dupReads: false });
   const seen = [];
   q.onUnsolicited((f) => seen.push(f[2]));
   const p = q.send(cmd.readPacket([1242]));
-  // inject a BT_READ notification while the read is in flight
-  for (const cb of dev.dataCbs) cb(buildFrame(0x71, [1, 2, 3]));
+  // inject a BT status broadcast and a stray mode-name reply while the read is in flight
+  for (const cb of dev.dataCbs) { cb(buildFrame(0x71, [1, 2, 3])); cb(buildFrame(0x04, [1, 65, 66])); }
   const res = await p;
   assert.equal(res.parsed.type, 'regs');
-  assert.deepEqual(seen, [0x71]);
+  assert.deepEqual(seen, [0x04]);
   assert.equal(q.stats.unsolicited, 1);
+  assert.equal(q.stats.btStatus, 1);
 });
 
 function slowTransport({ writeMs, failWrites = 0 }) {
@@ -128,6 +129,27 @@ test('write errors count toward dead detection', async () => {
   await assert.rejects(q.send(cmd.checkIdPacket()), /GATT/);
   await assert.rejects(q.send(cmd.checkIdPacket()), /GATT/);
   assert.equal(dead, 1);
+});
+
+test('a byte-identical duplicate of the last reply is dropped silently, not reported as unsolicited', async () => {
+  const { q, dev, log } = await setup({ latencyMs: 2 }); // FakeDevice duplicates READ replies by default
+  const seen = [];
+  q.onUnsolicited((f) => seen.push(f[2]));
+  await q.send(cmd.readPacket([1242]));
+  await new Promise((r) => setTimeout(r, 60));
+  assert.deepEqual(seen, []);
+  assert.equal(q.stats.duplicates, 1);
+  assert.equal(q.stats.unsolicited, 0);
+  assert.ok(!log.entries.some((e) => e.level === 'WARN'));
+});
+
+test('quiet requests and BT status frames are logged at DEBUG', async () => {
+  const { q, log } = await setup({ latencyMs: 0, dupReads: false });
+  await q.send(cmd.readPacket([1242]), { quiet: true });
+  for (const cb of q.transport.dataCbs) cb(buildFrame(0x71, [1, 2, 3]));
+  await new Promise((r) => setTimeout(r, 10));
+  assert.ok(log.entries.length >= 3);
+  assert.ok(log.entries.every((e) => e.level === 'DEBUG'), log.entries.map((e) => e.level).join(','));
 });
 
 test('clear rejects everything pending and in flight', async () => {

@@ -9,7 +9,7 @@ function makeLogger(opts) {
 }
 
 test('levels and hex helper', () => {
-  assert.deepEqual(LEVELS, ['INFO', 'WARN', 'ERR', 'TX', 'RX', 'REPORT']);
+  assert.deepEqual(LEVELS, ['INFO', 'WARN', 'ERR', 'TX', 'RX', 'REPORT', 'DEBUG']);
   assert.equal(toHex(Uint8Array.from([0x80, 0x05, 0x00])), '80 05 00');
 });
 
@@ -59,6 +59,9 @@ test('toText filters', () => {
   assert.deepEqual(log.toText('important').split('\n').map((l) => l.trim().split(/\s+/)[1]), ['INFO', 'WARN', 'REPORT']);
   assert.deepEqual(log.toText('packets').split('\n').map((l) => l.trim().split(/\s+/)[1]), ['TX']);
   assert.equal(log.lastReport(), 'R');
+  log.debug('hb', '80 05');
+  assert.equal(log.toText('packets').split('\n').length, 1, 'DEBUG hidden from packets');
+  assert.equal(log.toText('all').split('\n').length, 5, 'DEBUG visible in all');
 });
 
 test('clear and restore', () => {

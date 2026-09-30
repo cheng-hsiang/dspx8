@@ -1,4 +1,4 @@
-import { LAYERS, layerInfo, readBands, bandWritePairs, presetWritePairs, resetChannelPairs, copyChannelPairs, inferQScale, effectiveQScale, describeQScale, nearest, Q_MIN, Q_MAX } from '../../eq/model.js';
+import { LAYERS, layerInfo, readBands, bandWritePairs, presetWritePairs, resetChannelPairs, copyChannelPairs, effectiveQScale, describeQScale, nearest, Q_MIN, Q_MAX } from '../../eq/model.js';
 import { loadBundledPresets, localPresets, validatePreset, PRESET_SCHEMA } from '../../eq/presets.js';
 import { createCurve } from '../components/curve.js';
 import { toast, confirmDialog } from '../components/dialog.js';
@@ -9,7 +9,7 @@ import { STATUS } from '../../core/store.js';
 
 // 車主配置：前組 = CH1+CH2（門中低音 + 儀表高音 + 中置音圈，被動分音），後組 = CH3+CH4（後門中低音）。
 const DEFAULT_GROUPS = {
-  front: { name: '前', channels: [1, 2], hint: '含門中低音、儀表高音、中置。重低音 RCA 假設接在 CH2 前級：80 Hz 以下的調整會同時推到重低音（待靜音測試確認）。' },
+  front: { name: '前', channels: [1, 2], hint: '含前門中低音、儀表高音、中置。重低音接在 CH1+CH2 的前級輸出，所以這組 80 Hz 以下的調整會同時推到重低音。' },
   rear: { name: '後', channels: [3, 4], hint: '後門中低音，沒有高音單體。' },
 };
 const STATUS_TEXT = { [STATUS.UNKNOWN]: '未知', [STATUS.CONFIRMED]: '', [STATUS.PENDING]: '待確認', [STATUS.MISMATCH]: '不符' };
@@ -66,7 +66,7 @@ export function init(ctx, el) {
     <div class="card"><div class="bands"><table class="regs mono"><thead><tr><th>#</th><th>頻率</th><th>增益</th><th>Q</th><th>狀態</th></tr></thead><tbody id="eq-bands"></tbody></table></div></div>`;
   const $ = (id) => el.querySelector(id);
 
-  const qScale = () => effectiveQScale(st.layer, st.qMode, st.qInferred);
+  const qScale = () => effectiveQScale(st.layer, st.qMode);
   const channels = () => (st.sel.kind === 'group' ? st.groups[st.sel.key].channels : st.sel.kind === 'all' ? Array.from({ length: CH_COUNT }, (_, i) => i + 1) : [st.sel.ch]);
   const groupsMap = () => Object.fromEntries(Object.entries(st.groups).map(([k, g]) => [k, g.channels]));
   /** Store view with the values we have sent but not yet verified laid on top, so the UI never snaps back to a stale ack. */
@@ -157,8 +157,8 @@ export function init(ctx, el) {
     const nearestOpt = (sel, v) => { let best = 0, bd = Infinity; Array.from(sel.options).forEach((o, i) => { const d = Math.abs(Number(o.value) - v); if (d < bd) { bd = d; best = i; } }); if (sel.selectedIndex !== best) sel.selectedIndex = best; };
     nearestOpt($('#eq-freq'), b.f); nearestOpt($('#eq-q'), b.q);
     $('#eq-gain').value = b.g; $('#eq-gain-text').textContent = `${b.g >= 0 ? '+' : ''}${b.g.toFixed(1)} dB`;
-    $('#eq-qinfo').textContent = describeQScale(st.layer, st.qMode, st.qInferred);
-    $('#eq-qinfo').className = st.layer === LAYERS.MODE && st.qMode === 'auto' && st.qInferred === null ? 'warn' : 'muted';
+    $('#eq-qinfo').textContent = describeQScale(st.layer, st.qMode);
+    $('#eq-qinfo').className = 'muted';
     const bypassKnown = store.getStatus(ADDR.EQ_BYPASS_SWITCH) !== STATUS.UNKNOWN;
     $('#eq-bypass').textContent = !bypassKnown ? 'EQ 狀態 —' : store.get(ADDR.EQ_BYPASS_SWITCH) === 0 ? 'EQ 旁通中' : 'EQ 啟用';
     $('#eq-bypass').className = !bypassKnown ? 'muted' : store.get(ADDR.EQ_BYPASS_SWITCH) === 0 ? 'warn' : 'ok';
@@ -236,7 +236,7 @@ export function init(ctx, el) {
     requestAnimationFrame(() => { raf = false; if (curve.dragging) { renderTable(); return; } renderCurve(); renderControls(); renderTable(); });
   });
   device.on('state', () => { if (device.state === 'disconnected') { sent.clear(); pending.clear(); touched.clear(); } renderAll(); });
-  device.on('dump', () => { st.qInferred = inferQScale(store); sent.clear(); if (!el.hidden) renderAll(); });
+  device.on('dump', () => { sent.clear(); if (!el.hidden) renderAll(); });
   ctx.events.addEventListener('tab', (ev) => { if (ev.detail === 'eq') renderAll(); });
 
   (async () => {
@@ -246,7 +246,6 @@ export function init(ctx, el) {
       const g = await storage.get('settings', 'eqGroups'); if (g?.front?.length && g?.rear?.length) { st.groups.front.channels = g.front; st.groups.rear.channels = g.rear; }
     } catch { /* defaults */ }
     $('#eq-layer').value = st.layer; $('#eq-qmode').value = st.qMode;
-    if (store.confirmedCount() > 0) st.qInferred = inferQScale(store);
     try { st.bundled = await loadBundledPresets(); } catch (err) { logger.warn(`內建預設載入失敗：${err.message}`); }
     try { st.local = await localPresets(storage).list(); } catch { /* ignore */ }
     renderPresets(); renderAll();

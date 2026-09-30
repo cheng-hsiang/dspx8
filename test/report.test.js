@@ -17,6 +17,7 @@ const dumpInfo = { complete: true, ms: 1234, failedSegments: [], method: 'sect' 
 
 test('inferQScale', () => {
   const store = seededStore();
+  assert.equal(inferQScale(store).verdict, 'device-default'); // seeded raw 240 = the real device's factory value
   for (let ch = 1; ch <= 8; ch++) store.set(eqAddr(ch, 1, 'Q'), 100);
   assert.equal(inferQScale(store).verdict, 'no-qrate');
   for (let ch = 1; ch <= 8; ch++) store.set(eqAddr(ch, 1, 'Q'), 32);
@@ -30,7 +31,7 @@ test('report contains every mandated section', () => {
   const text = buildReport({ env, info, dumpInfo, store, writeTest: { addr: 156, name: 'CH1 EQ3 G', before: 500, sent: 560, readBack: 560, ok: true, ms: 88 } });
   assert.ok(text.startsWith('===== 報告摘要 ====='));
   assert.ok(text.trimEnd().endsWith('===== 報告結束 ====='));
-  for (const needle of ['TestUA/1.0', 'DSP-X8s-SIM', '客戶代碼: 4006', '整機讀取: 完整', '1234 ms', 'CH1 XOVER', 'CH1 EQ1', 'CH1 EQ2', 'CH1 EQ3', 'CH1 EQ32', 'Q 推斷', 'MUTE_1', 'MIX11_1', 'MIX41_1_1', 'SWITCH21_1', 'DELAY_1', 'M0_1', '寫入測試', '送出 560', 'ok']) {
+  for (const needle of ['TestUA/1.0', 'DSP-X8s-SIM', '客戶代碼: 4006', '整機讀取: 完整', '1234 ms', 'CH1 XOVER', 'CH1 EQ1', 'CH1 EQ2', 'CH1 EQ3', 'CH1 EQ32', 'Q 推斷', 'MUTE_1', 'MIX11_1', 'MIX41 IN1 CH1', 'SWITCH21_1', 'DELAY_1', 'M0_1', '寫入測試', '送出 560', 'ok']) {
     assert.ok(text.includes(needle), `missing ${needle}`);
   }
 });
