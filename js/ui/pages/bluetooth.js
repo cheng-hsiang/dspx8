@@ -15,7 +15,7 @@ export function init(ctx, el) {
   const { device, store, logger, storage, env } = ctx;
   el.innerHTML = `
     <h2>藍牙</h2>
-    <div class="banner" id="offline-status">尚未可離線使用（等待快取完成）</div>
+    <p class="muted" id="bt-version">線上版本 ${document.documentElement.dataset.version ?? 'dev'}，不做離線快取，每次開啟需有網路。</p>
     ${env.webBluetooth || ctx.transportKind === 'sim' ? '' : '<div class="banner warn">此瀏覽器不支援 Web Bluetooth。Android 請用 Chrome 或 Edge，iPhone 請安裝 Bluefy 瀏覽器開啟本頁。</div>'}
     <div class="card"><h3>連線</h3>
       <div class="row"><button id="bt-connect" class="primary">連線</button><button id="bt-disconnect" disabled>斷線</button>
@@ -39,13 +39,6 @@ export function init(ctx, el) {
     <div class="card"><details><summary>進階：原始暫存器</summary><div id="bt-regtable" style="margin-top:10px"></div></details></div>`;
 
   const $ = (id) => el.querySelector(id);
-  const offline = $('#offline-status');
-  ctx.events.addEventListener('sw-cached', (ev) => { offline.textContent = `已可離線使用，版本 ${ev.detail.version}`; offline.classList.add('ok'); });
-  ctx.events.addEventListener('sw-update', (ev) => {
-    offline.innerHTML = '有新版本 <button id="sw-reload" class="primary" style="margin-left:8px">重新載入</button>';
-    offline.querySelector('#sw-reload').addEventListener('click', () => { ev.detail.waiting?.postMessage({ type: 'skipWaiting' }); setTimeout(() => location.reload(), 300); });
-  });
-
   const renderState = () => {
     const s = device.state;
     $('#bt-connect').disabled = s !== STATE.DISCONNECTED;

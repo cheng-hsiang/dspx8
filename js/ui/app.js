@@ -53,23 +53,7 @@ async function boot() {
   try { initial = localStorage.getItem('tab') || initial; } catch { /* ignore */ }
   show(PAGES[initial] ? initial : 'bluetooth');
 
-  try { const persisted = await navigator.storage?.persist?.(); if (persisted !== undefined) logger.info(`持久儲存: ${persisted}`); } catch { /* ignore */ }
 
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('message', (ev) => {
-      if (ev.data?.type === 'cached') { logger.info(`離線快取完成，版本 ${ev.data.version}`); events.dispatchEvent(new CustomEvent('sw-cached', { detail: ev.data })); }
-    });
-    try {
-      const reg = await navigator.serviceWorker.register('./sw.js');
-      reg.addEventListener('updatefound', () => {
-        const w = reg.installing;
-        w?.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) events.dispatchEvent(new CustomEvent('sw-update', { detail: reg })); });
-      });
-      if (reg.active && !reg.installing) events.dispatchEvent(new CustomEvent('sw-cached', { detail: { version: document.documentElement.dataset.version ?? 'active', fromRegistration: true } }));
-    } catch (err) { logger.warn(`Service Worker 註冊失敗：${err.message}`); }
-  } else {
-    logger.warn('此環境沒有 Service Worker，無法離線使用');
-  }
   window.dspx = ctx; // 供開發者在 console 檢查
 }
 

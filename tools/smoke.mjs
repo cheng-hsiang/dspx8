@@ -107,10 +107,7 @@ const SCRIPT_B = `(async () => {
   document.querySelector('[data-tab="eq"]').click();
   await sleep(100);
   out.eqDisabledWhenOffline = document.querySelector('#eq-gain').disabled && document.querySelector('#eq-load').disabled;
-  out.swReady = await until(() => (document.querySelector('#offline-status').textContent || '').includes('已可離線使用'), 10000);
-  const keys = await caches.keys();
-  out.cacheName = keys.find((k) => k.startsWith('dspx8s-')) || null;
-  out.cachedFiles = out.cacheName ? (await (await caches.open(out.cacheName)).keys()).length : 0;
+  out.versionLine = (document.querySelector('#bt-version')?.textContent || '').includes('線上版本');
   return out;
 })()`;
 
@@ -172,7 +169,7 @@ try {
     allConfirmed: result.confirmed === 1613, writeTest: result.writeTest, reportOk: result.reportOk, logHasLines: result.logLines > 10,
     volInitial30: result.volInitial === '30', volWritten: result.volWritten, muteWritten: result.muteWritten, modeActive1: result.modeActive === '1',
     snapshotSaved: result.snapshots >= 1, noConsoleErrors: errors.length === 0,
-    swReady: result.swReady, precacheComplete: result.cachedFiles >= 31,
+    versionLine: result.versionLine,
     eqCanvas: result.eqCanvas, eqPresetsLoaded: result.eqPresetsLoaded, eqPresetApplied: result.eqPresetApplied,
     eqFrontWritten: result.eqBandCh1 === 530 && result.eqBandCh2 === 530, eqRearUntouched: result.eqBandCh3Zero === 500,
     eqNudged: result.eqNudged, eqNoMismatch: result.eqMismatches === 0, eqDisabledWhenOffline: result.eqDisabledWhenOffline,

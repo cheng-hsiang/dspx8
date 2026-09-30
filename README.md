@@ -1,6 +1,6 @@
 # DSP-X8s 網頁調音器
 
-Yiye lang DSP-X8s 車用 DSP 的 Web Bluetooth 調音網頁（PWA）。規格：`docs/superpowers/specs/2026-09-29-dsp-x8s-web-tuner-design.md`，第一階段計畫：`docs/superpowers/plans/2026-09-30-dsp-x8s-phase1-implementation.md`。
+Yiye lang DSP-X8s 車用 DSP 的 Web Bluetooth 調音網頁。沒有離線快取，也沒有 Service Worker，每次開啟都需要網路。規格：`docs/superpowers/specs/2026-09-29-dsp-x8s-web-tuner-design.md`，第一階段計畫：`docs/superpowers/plans/2026-09-30-dsp-x8s-phase1-implementation.md`。
 
 ## 需求
 
@@ -14,22 +14,21 @@ Yiye lang DSP-X8s 車用 DSP 的 Web Bluetooth 調音網頁（PWA）。規格：
 - `npm run serve`：啟動本機伺服器。`http://localhost:8080/?sim=1` 用模擬機器，不需藍牙。
 - `npm run tables`：從反編譯結果（`../src/data/utils/TabMainUtil.js`）重新產生 `js/protocol/tables.js`。
 - `npm run icons`：重新產生 PWA 圖示。
-- 改版時把 `sw.js` 的 `VERSION` 與 `index.html` 的 `data-version` 一起改，否則已安裝的手機不會更新快取。
+- 改版時改 `index.html` 的 `data-version`。沒有離線快取，每次開啟都從網站載入最新版。
 
 ## 部署
 
 GitHub Pages：把本目錄推到 repo 的 `main`，Settings → Pages → Source 選 `main` / root。網址為 `https://<帳號>.github.io/<repo>/`。所有路徑都是相對的，放在子路徑下可正常運作。
 
-Netlify：到 app.netlify.com 的 Drop 頁把整個 `web` 資料夾拖進去，取得 `https://<名稱>.netlify.app`。
+Netlify：先 `npm run pack`，到 app.netlify.com 的 Drop 頁把 `dist` 資料夾拖進去，取得 `https://<名稱>.netlify.app`。更新時到該網站的 Deploys 頁再拖一次。
 
 ## 第一階段真機測試（回報用）
 
-1. 有網路時開網址，等藍牙分頁顯示「已可離線使用」，Chrome 選單「安裝應用程式」加到主畫面。
+1. 有網路時開網址（Android 用 Chrome，iPhone 用 Bluefy）。藍牙分頁頂端會顯示版本號。
 2. 車上音量調低。按「連線」選擇 DSP 裝置，等整機讀取 17 / 17。找不到裝置時勾「找不到裝置時接受所有裝置」再按一次。
 3. 寫入測試：CH1、頻段 3、+6 dB，按「執行寫入測試」，聽是否有變化，然後按「還原為 0 dB」。
 4. 切到「日誌」分頁，按「複製報告摘要」，貼給開發者。複製失敗改用「分享」或「匯出 .txt」。
 5. 「聲音」分頁可逐一靜音 CH1 到 CH8，找出每個 CH 實際接到哪顆喇叭。
-6. 若在 iPhone Bluefy：關閉網路後重開網頁，回報能否開啟。
 
 ## EQ 頁（0.2.0）
 
