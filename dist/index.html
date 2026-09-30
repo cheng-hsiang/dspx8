@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-Hant" data-version="0.3.1">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101418">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>DSP-X8s 調音</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+  <header class="top">
+    <div id="statusbar" class="statusbar"></div>
+    <nav id="tabs" class="tabs">
+      <button data-tab="bluetooth" class="active">藍牙</button>
+      <button data-tab="sound">聲音</button>
+      <button data-tab="eq">EQ</button>
+      <button data-tab="modes">模式</button>
+      <button data-tab="log">日誌</button>
+    </nav>
+  </header>
+  <main id="pages">
+    <section id="page-bluetooth" data-page="bluetooth" class="page"></section>
+    <section id="page-sound" data-page="sound" class="page" hidden></section>
+    <section id="page-eq" data-page="eq" class="page" hidden></section>
+    <section id="page-modes" data-page="modes" class="page" hidden></section>
+    <section id="page-log" data-page="log" class="page" hidden></section>
+  </main>
+  <div id="toast" class="toast" hidden></div>
+  <dialog id="confirm">
+    <form method="dialog">
+      <p id="confirm-text"></p>
+      <menu><button value="cancel" id="confirm-cancel">取消</button><button value="ok" id="confirm-ok" class="primary">確定</button></menu>
+    </form>
+  </dialog>
+  <script type="module" src="./js/ui/app.js"></script>
+</body>
+</html>

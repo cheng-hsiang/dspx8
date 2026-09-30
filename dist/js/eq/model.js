@@ -1,0 +1,165 @@
+import { eqAddr, ADDR, EQ_SLOTS } from '../protocol/addrmap.js';
+import { encodeFreq, decodeFreq, encodeGain, decodeGain, decodeQ, clamp, GAIN_MIN_DB, GAIN_MAX_DB, QRATE } from '../protocol/codec.js';
+import { TAB_FREQ, TAB_Q } from '../protocol/tables.js';
+import { inferQScale as reportInfer } from '../core/report.js';
+
+export const LAYERS = Object.freeze({ MODE: 'mode', APP: 'app' });
+/** Q divisor the OEM app applies (raw = 100·Q / QRATE); defined in the codec so the log formatter can share it. */
+export { QRATE };
+
+export function layerInfo(layer) {
+  return layer === LAYERS.APP
+    ? { bands: 10, maxSlots: 10, label: '10 段（原廠層）' }
+    : { bands: 31, maxSlots: EQ_SLOTS, label: '31 段（模式區）' };
+}
+
+export function bandAddrs(layer, ch, band) {
+  const TYPE = layer === LAYERS.APP ? ADDR.iir100(ch, band, 0) : eqAddr(ch, band, 'TYPE');
+  return { TYPE, F: TYPE + 1, G: TYPE + 2, Q: TYPE + 3 };
+}
+
+/** 1 = raw is hundredths of Q; QRATE = OEM scaling; null = could not be inferred from the dump. */
+export function inferQScale(store) {
+  const { verdict } = reportInfer(store);
+  return verdict === 'no-qrate' ? 1 : verdict === 'qrate' ? QRATE : null;
+}
+
+/**
+ * The Q divisor actually used for reads/writes. The OEM layer is known to use QRATE (the mini program
+ * divides by it), so only an explicit '1' overrides it there. The 31-band layer follows the dump inference
+ * (cached by the caller once per dump) and falls back to 1 when it could not be inferred.
+ */
+export function effectiveQScale(layer, qMode) {
+  // Real device: the 31-band layer's factory Q raw is 240 and the OEM constant is literally 7.6 / 2.4,
+  // i.e. the OEM authors calibrated raw 240 = Q 7.6. Both layers therefore use QRATE unless forced to 1.
+  return qMode === '1' ? 1 : QRATE;
+}
+
+export function describeQScale(layer, qMode) {
+  if (qMode === '1') return '手動：1';
+  if (qMode === 'qrate') return '手動：×3.17';
+  return '×3.17（原廠換算）';
+}
+
+export function nearest(table, v) {
+  let best = table[0];
+  for (const t of table) if (Math.abs(t - v) < Math.abs(best - v)) best = t;
+  return best;
+}
+
+export function readBands(store, { layer, ch, qScale = 1, slots } = {}) {
+  const n = slots ?? layerInfo(layer).bands;
+  const out = [];
+  for (let band = 1; band <= n; band++) {
+    const addrs = bandAddrs(layer, ch, band);
+    const raw = { TYPE: store.get(addrs.TYPE), F: store.get(addrs.F), G: store.get(addrs.G), Q: store.get(addrs.Q) };
+    out.push({
+      band, addrs, raw, type: raw.TYPE,
+      f: decodeFreq(raw.F), g: decodeGain(raw.G), q: decodeQ(raw.Q) * (qScale ?? 1),
+      enabled: raw.TYPE !== 0 && raw.F !== 0,
+      status: Math.max(store.getStatus(addrs.F), store.getStatus(addrs.G), store.getStatus(addrs.Q)),
+    });
+  }
+  return out;
+}
+
+export const FREQ_MIN = TAB_FREQ[0];
+export const FREQ_MAX = TAB_FREQ[TAB_FREQ.length - 1];
+export const Q_MIN = TAB_Q[0];
+export const Q_MAX = TAB_Q[TAB_Q.length - 1];
+
+/**
+ * Encode a (f, g, q) request. Values are clamped to the device tables' range but not snapped to table
+ * entries: the OEM app itself writes 60 Hz, which is absent from TAB_FREQ (59 / 60.1), so the device
+ * accepts arbitrary frequencies. The UI pickers still offer the table values. Missing fields are left out.
+ */
+export function encodeBand({ f, g, q } = {}, qScale = 1) {
+  const out = {};
+  if (f !== undefined) out.F = encodeFreq(clamp(f, FREQ_MIN, FREQ_MAX));
+  if (g !== undefined) out.G = encodeGain(clamp(g, GAIN_MIN_DB, GAIN_MAX_DB));
+  if (q !== undefined) out.Q = Math.round((100 * clamp(q, Q_MIN, Q_MAX)) / (qScale ?? 1));
+  return out;
+}
+
+function bandEnabled(store, addrs) { return store.get(addrs.TYPE) !== 0 && store.get(addrs.F) !== 0; }
+
+/** Pairs to write one band on every channel of a group; disabled channels are skipped, unchanged fields omitted. */
+export function bandWritePairs(layer, channels, band, values, qScale, store) {
+  const enc = encodeBand(values, qScale);
+  const pairs = [], skipped = [];
+  for (const ch of channels) {
+    const addrs = bandAddrs(layer, ch, band);
+    if (!bandEnabled(store, addrs)) { skipped.push(ch); continue; }
+    for (const field of ['F', 'G', 'Q']) {
+      if (enc[field] === undefined) continue;
+      if (store.get(addrs[field]) !== enc[field]) pairs.push({ addr: addrs[field], val: enc[field] });
+    }
+  }
+  return { pairs, skipped };
+}
+
+/** Assign each preset filter to the nearest (log-distance) enabled band not already taken. */
+export function mapPresetToBands(filters, bands) {
+  const free = bands.filter((b) => b.enabled && b.f > 0);
+  const mapped = [], dropped = [];
+  for (const flt of filters) {
+    let best = null, bestD = Infinity;
+    for (const b of free) { const d = Math.abs(Math.log(flt.f / b.f)); if (d < bestD) { bestD = d; best = b; } }
+    if (!best) { dropped.push(flt); continue; }
+    free.splice(free.indexOf(best), 1);
+    mapped.push({ band: best.band, f: flt.f, g: flt.g, q: flt.q });
+  }
+  return { mapped, dropped };
+}
+
+/** Full preset application: zero every enabled band's gain, then write the mapped filters. One pair per address. */
+export function presetWritePairs(preset, layer, groups, store, qScale) {
+  const target = new Map();
+  const dropped = [], skipped = [];
+  for (const [groupName, filters] of Object.entries(preset.eq ?? {})) {
+    const channels = groups?.[groupName] ?? preset.channelGroups?.[groupName] ?? [];
+    for (const ch of channels) {
+      const bands = readBands(store, { layer, ch, qScale });
+      const enabled = bands.filter((b) => b.enabled);
+      if (enabled.length === 0) { skipped.push(ch); continue; }
+      for (const b of enabled) target.set(b.addrs.G, 500);
+      const { mapped, dropped: d } = mapPresetToBands(filters, bands);
+      for (const x of d) dropped.push({ group: groupName, ch, f: x.f });
+      for (const x of mapped) {
+        const addrs = bandAddrs(layer, ch, x.band);
+        const enc = encodeBand({ f: x.f, g: x.g, q: x.q }, qScale);
+        target.set(addrs.F, enc.F); target.set(addrs.G, enc.G); target.set(addrs.Q, enc.Q);
+      }
+    }
+  }
+  const pairs = Array.from(target, ([addr, val]) => ({ addr, val }));
+  return { pairs, dropped, skipped };
+}
+
+export const otherLayer = (layer) => (layer === LAYERS.APP ? LAYERS.MODE : LAYERS.APP);
+
+/** Enabled bands on `layer` whose gain is not 0 dB. The two layers act in series, so a forgotten curve here stacks onto the one being edited. */
+export function nonFlatBands(store, layer, channels) {
+  const out = [];
+  for (const ch of channels) for (const b of readBands(store, { layer, ch })) if (b.enabled && b.raw.G !== 500) out.push({ ch, band: b.band, g: b.g, addr: b.addrs.G });
+  return out;
+}
+export const flattenPairs = (hits) => hits.map((h) => ({ addr: h.addr, val: 500 }));
+
+export function resetChannelPairs(layer, ch, store) {
+  return readBands(store, { layer, ch }).filter((b) => b.enabled).map((b) => ({ addr: b.addrs.G, val: 500 }));
+}
+
+export function copyChannelPairs(layer, from, to, store) {
+  const src = readBands(store, { layer, ch: from }).filter((b) => b.enabled);
+  const pairs = [];
+  for (const ch of to) {
+    if (ch === from) continue;
+    for (const b of src) {
+      const addrs = bandAddrs(layer, ch, b.band);
+      if (!bandEnabled(store, addrs)) continue;
+      pairs.push({ addr: addrs.F, val: b.raw.F }, { addr: addrs.G, val: b.raw.G }, { addr: addrs.Q, val: b.raw.Q });
+    }
+  }
+  return pairs;
+}

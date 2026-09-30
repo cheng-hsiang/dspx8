@@ -3,7 +3,6 @@ node_modules/
 Thumbs.db
 *.log
 .superpowers/
-dist/
 *.rar
 *.zip
 .smoke/
