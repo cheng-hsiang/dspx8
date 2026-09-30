@@ -22,6 +22,7 @@ export function init(ctx, el) {
     <div class="card">
       <div class="row between"><h3 style="margin:0">各聲道</h3><label class="muted"><input type="checkbox" id="show-all"> 顯示 CH5–CH8</label></div>
       <p class="muted" style="margin:6px 0 4px">名稱可點擊修改，只存在此瀏覽器。相位 180° 把該聲道反相。延時可直接輸入公分，或用 − / + 以 1 個取樣點（0.72 cm）微調；最遠的喇叭填 0，其餘填「最遠距離 − 自己的距離」。</p>
+      <p class="warn" style="margin:0 0 4px">注意：真機紀錄顯示，機器重新開機後各聲道音量可能會被統一成 CH1 的音量（待確認）。前後音量平衡建議交給「自動調音」，它用 EQ 調整。</p>
       <div id="ch-list"></div></div>`;
   const $ = (id) => el.querySelector(id);
   const send = (pairs) => device.writeRegs(pairs).then(() => true, (err) => { toast(`寫入失敗：${errText(err)}`); return false; });

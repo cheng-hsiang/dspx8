@@ -20,8 +20,8 @@ input[type="range"] { width: 100%; min-height: 44px; }
 .muted { color: var(--muted); } .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
 .mono { font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 12.5px; }
 progress { width: 100%; height: 10px; }
-.tabs { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--panel); }
-.tabs button { border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 8px 0; min-height: 48px; }
+.tabs { display: grid; grid-template-columns: repeat(6, 1fr); background: var(--panel); }
+.tabs button { border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 8px 0; min-height: 48px; font-size: 14px; white-space: nowrap; }
 .tabs button.active { color: var(--accent); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: #000c; color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 5; max-width: 90vw; }
 dialog { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 12px; max-width: 90vw; }
@@ -40,3 +40,8 @@ textarea.copyfallback { width: 100%; height: 40vh; font-family: ui-monospace, mo
 .bands { max-height: 42vh; overflow: auto; }
 .bands tr.sel td { background: #1f2a36; }
 .bands tr.off td { color: var(--muted); font-style: italic; }
+.meter { height: 8px; background: #0b0f13; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin-top: 10px; }
+.meter > div { height: 100%; width: 0; background: var(--ok); transition: width .1s linear; }
+.steps { margin: 0; padding-left: 20px; } .steps li { margin: 4px 0; }
+.legend span { margin-right: 14px; white-space: nowrap; } .legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 4px; }
+#tu-groups button.active { outline: 2px solid var(--accent); color: var(--accent); }

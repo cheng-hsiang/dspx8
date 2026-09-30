@@ -22,7 +22,7 @@ if (!browser) { console.error('no Chrome/Edge found; set BROWSER=path'); process
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const server = spawn(process.execPath, [join(ROOT, 'tools/serve.mjs')], { env: { ...process.env, PORT: String(PORT) }, stdio: 'ignore' });
 const profile = mkdtempSync(join(tmpdir(), 'dspx8s-smoke-'));
-const chrome = spawn(browser, ['--headless=new', '--disable-gpu', '--no-first-run', `--remote-debugging-port=${CDP_PORT}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
+const chrome = spawn(browser, ['--headless=new', '--disable-gpu', '--no-first-run', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${CDP_PORT}`, `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
 
 function cleanup(code) {
   try { chrome.kill(); } catch { /* ignore */ }
@@ -143,6 +143,73 @@ const SCRIPT_B = `(async () => {
   return out;
 })()`;
 
+// auto-tune in the simulated car: Q check, front measure → apply → re-measure, rear with level trim, undo, copy/paste
+const SCRIPT_D = `(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (fn, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (fn()) return true; await sleep(50); } return false; };
+  const out = {};
+  await until(() => window.dspx && document.querySelector('#bt-connect'));
+  document.querySelector('#bt-connect').click();
+  out.tuneDump = await until(() => (document.querySelector('#bt-progress-text').textContent || '').startsWith('完成'), 20000);
+  document.querySelector('[data-tab="tune"]').click();
+  await sleep(100);
+  const t = window.dspx.tune, regs = window.dspx.device.transport.regs;
+  const { eqAddr, ADDR } = await import('./js/protocol/addrmap.js');
+  const { encodeGain } = await import('./js/protocol/codec.js');
+  out.tuneMicLog = window.dspx.logger.entries.some((e) => e.text.startsWith('麥克風支援'));
+  document.querySelector('#tu-mic').click();
+  out.tuneFrames = await until(() => t.state.latest && t.state.rta, 3000);
+  const q = await t.qTest({ confirm: false });
+  out.tuneQ = q ? q.verdict : null;
+  out.tuneQRestored = regs[eqAddr(1, 18, 'G')] === 500 && regs[eqAddr(1, 18, 'Q')] === 240 && [1, 2, 3, 4].every((ch) => regs[ADDR.muteOfChannel(ch)] === 0);
+  t.select('front');
+  await t.measure();
+  const p1 = t.planFor('front');
+  out.tuneFrontBefore = p1 ? p1.before : null;
+  out.tuneFrontStrength = p1 ? p1.strength : null;
+  out.tuneApplied = await t.apply({ confirm: false });
+  out.tuneRegsWritten = regs[eqAddr(1, 9, 'Q')] === 136 && regs[eqAddr(2, 9, 'Q')] === 136 && regs[eqAddr(1, 9, 'G')] === encodeGain(p1.gains[8]) && regs[eqAddr(1, 3, 'F')] === 33093;
+  await t.measure();
+  const p2 = t.planFor('front');
+  out.tuneFrontAfter = p2 ? p2.before : null;
+  t.select('rear');
+  await t.measure();
+  const pr = t.planFor('rear');
+  out.tuneRearTrim = pr ? pr.trimDb : null;
+  out.tuneRearHfCutOnly = pr ? Array.from(pr.gains).every((g, i) => i < 24 || g <= 0) : false;
+  const q3 = regs[eqAddr(3, 9, 'Q')];
+  out.tuneRearApplied = await t.apply({ confirm: false });
+  out.tuneRearChanged = regs[eqAddr(3, 9, 'Q')] === 136;
+  out.tuneUndone = (await t.undo({ confirm: false })) && regs[eqAddr(3, 9, 'Q')] === q3;
+  const n0 = t.state.runs.front.length;
+  out.tunePaste = t.pasteText(t.exportText('front')) && t.state.runs.front.length === n0 + 1;
+  out.tuneLogs = ['量測 前', 'Q 驗證', '自動調音套用'].every((k) => window.dspx.logger.entries.some((e) => e.text.includes(k)));
+  out.tuneMutesRestored = [1, 2, 3, 4].every((ch) => regs[ADDR.muteOfChannel(ch)] === 0);
+  t.select('front');
+  return out;
+})()`;
+
+// the real microphone path, fed by Chrome's fake capture device
+const SCRIPT_E = `(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (fn, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (fn()) return true; await sleep(50); } return false; };
+  const out = {};
+  await until(() => window.dspx && window.dspx.tune);
+  const t = window.dspx.tune;
+  document.querySelector('[data-tab="tune"]').click();
+  document.querySelector('#tu-mic').click();
+  out.micOpened = await until(() => t.state.info && t.state.info.kind === 'mic', 8000);
+  out.micError = t.state.micError;
+  out.micFrames = await until(() => t.state.latest && Array.from(t.state.latest.bands).every(Number.isFinite), 5000);
+  out.micLogged = window.dspx.logger.entries.some((e) => e.text.startsWith('麥克風已開啟'));
+  t.select('all');
+  await t.measure();
+  out.micMeasured = t.state.runs.all.length === 1;
+  await t.closeMic();
+  out.micClosed = !t.state.source;
+  return out;
+})()`;
+
 const SCRIPT_C = `(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const until = async (fn, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (fn()) return true; await sleep(50); } return false; };
@@ -209,11 +276,24 @@ try {
   await cdp.send('Page.navigate', { url: `http://localhost:${PORT}/?sim=1&lat=60` });
   await sleep(1500);
   const resultC = await cdp.evaluate(SCRIPT_C);
-  const result = { ...resultA, ...resultB, ...resultC };
+  await cdp.send('Page.navigate', { url: `http://localhost:${PORT}/?sim=1&tuneSec=1` });
+  await sleep(1500);
+  const resultD = await cdp.evaluate(SCRIPT_D);
+  try {
+    const { writeFile } = await import('node:fs/promises');
+    await cdp.evaluate(`document.querySelector('#tu-plot').scrollIntoView(); true`);
+    await sleep(300);
+    const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    await writeFile(join(ROOT, '.smoke', 'tune.png'), Buffer.from(shot.data, 'base64'));
+  } catch (err) { console.warn('tune screenshot failed', err.message); }
+  await cdp.send('Page.navigate', { url: `http://localhost:${PORT}/?sim=1&mic=1&tuneSec=1` });
+  await sleep(1500);
+  const resultE = await cdp.evaluate(SCRIPT_E);
+  const result = { ...resultA, ...resultB, ...resultC, ...resultD, ...resultE };
   const errors = cdp.events.filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error'))
     .map((e) => e.method === 'Runtime.exceptionThrown' ? e.params.exceptionDetails.exception?.description ?? e.params.exceptionDetails.text : e.params.args.map((a) => a.value ?? a.description).join(' '));
   const checks = {
-    tabs5: result.tabs === 5, pages5: result.pages === 5, booted: result.booted, connected: result.connected, dumpDone: result.dumpDone,
+    tabs6: result.tabs === 6, pages6: result.pages === 6, booted: result.booted, connected: result.connected, dumpDone: result.dumpDone,
     allConfirmed: result.confirmed === 1613, writeTest: result.writeTest, reportOk: result.reportOk, logHasLines: result.logLines > 10,
     volInitial60: result.volInitial === '60', volWritten: result.volWritten, muteWritten: result.muteWritten, modeActive1: result.modeActive === '1',
     snapshotSaved: result.snapshots >= 1, noConsoleErrors: errors.length === 0,
@@ -227,6 +307,12 @@ try {
     delayStepped: result.delayStepped, inputWritten: result.inputWritten, tabsOnTop: result.tabsOnTop,
     otherLayerWarned: result.otherLayerWarned, otherLayerZeroed: result.otherLayerZeroed, presetZeroesOther: result.presetZeroesOther,
     slowMasterAligned: result.slowMasterAligned, slowDelayStep: result.slowDelayStep,
+    tuneDump: result.tuneDump, tuneMicLog: result.tuneMicLog, tuneFrames: result.tuneFrames, tuneQ: result.tuneQ === 'qrate', tuneQRestored: result.tuneQRestored,
+    tuneFrontMeasured: result.tuneFrontBefore > 1.5 && result.tuneFrontStrength === 1, tuneApplied: result.tuneApplied, tuneRegsWritten: result.tuneRegsWritten,
+    tuneFrontImproved: result.tuneFrontAfter < 0.8 && result.tuneFrontAfter < 0.4 * result.tuneFrontBefore,
+    tuneRearTrim: result.tuneRearTrim < -2, tuneRearHfCutOnly: result.tuneRearHfCutOnly, tuneRearApplied: result.tuneRearApplied && result.tuneRearChanged,
+    tuneUndone: result.tuneUndone, tunePaste: result.tunePaste, tuneLogs: result.tuneLogs, tuneMutesRestored: result.tuneMutesRestored,
+    micOpened: result.micOpened, micFrames: result.micFrames, micLogged: result.micLogged, micMeasured: result.micMeasured, micClosed: result.micClosed,
     modeSwitched: result.modeSwitched, modeActive2: result.modeActive2, modeEqFlat: result.modeEqFlat,
     modeUnsavedTracked: result.unsavedBefore > 0 && result.unsavedAfter === 0, modeSaved: result.modeSaved, slotSaved: result.slotSaved,
   };

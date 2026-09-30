@@ -261,6 +261,8 @@ export function init(ctx, el) {
     if (hits.length) toast(`另一層「${layerInfo(otherLayer(st.layer)).label}」有 ${hits.length} 個頻段不是 0 dB，會和 EQ 疊加。載入預設時會一起歸零，或到 EQ 頁按「歸零另一層增益」。`, 8000);
   });
   ctx.events.addEventListener('tab', (ev) => { if (ev.detail === 'eq') renderAll(); });
+  // the auto-tune Q check can settle the Q convention; follow it here too
+  ctx.events.addEventListener('qmode', (ev) => { st.qMode = ev.detail; $('#eq-qmode').value = st.qMode; renderAll(); });
 
   (async () => {
     try {

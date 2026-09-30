@@ -4,11 +4,8 @@ import { CMD, parseResponse } from '../protocol/commands.js';
 import { hi, lo, encodeFreq, encodeGain } from '../protocol/codec.js';
 import { REG_COUNT, MODE_END, CH_COUNT, EQ_SLOTS, ADDR, eqAddr, xoverAddr } from '../protocol/addrmap.js';
 import { INPUT } from '../protocol/tables.js';
+import { DEVICE_EQ_F, DEVICE_APP_F } from '../protocol/factory.js';
 
-// Band centre frequencies exactly as the real DSP-X8s reports them (dump 2026-09-30)
-const DEVICE_EQ_F = [20.1, 25.3, 32.5, 40.1, 50.6, 63.7, 80.3, 101, 125, 161, 202, 250, 315, 405, 500, 630, 809, 1000, 1260, 1620,
-  2000, 2520, 3170, 4000, 5040, 6350, 8000, 10100, 12500, 16000, 20200];
-const DEVICE_APP_F = [60, 350, 2000, 10100, 250, 809, 3170, 6350, 8000, 20000];
 const BT_STATUS_A = [0x00, 0x06, 0x01, 0x1F, 0, 0, 0, 0, 0, 0, 0x02, 0x08];
 const BT_STATUS_B = [0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

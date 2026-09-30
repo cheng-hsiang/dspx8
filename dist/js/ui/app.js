@@ -9,10 +9,12 @@ import * as statusbar from './statusbar.js';
 import * as bluetoothPage from './pages/bluetooth.js';
 import * as soundPage from './pages/sound.js';
 import * as eqPage from './pages/eq.js';
+import * as tunePage from './pages/tune.js';
+import { micSupport } from '../tune/source.js';
 import * as modesPage from './pages/modes.js';
 import * as logPage from './pages/log.js';
 
-const PAGES = { bluetooth: bluetoothPage, sound: soundPage, eq: eqPage, modes: modesPage, log: logPage };
+const PAGES = { bluetooth: bluetoothPage, sound: soundPage, eq: eqPage, tune: tunePage, modes: modesPage, log: logPage };
 
 async function boot() {
   const params = new URLSearchParams(location.search);
@@ -30,6 +32,8 @@ async function boot() {
   logger.info(`啟動${transportKind === 'sim' ? '（模擬機器）' : ''} 版本 ${document.documentElement.dataset.version ?? 'dev'}`);
   logger.info(`瀏覽器: ${env.userAgent}`);
   logger.info(`WebBluetooth=${env.webBluetooth} Bluefy=${env.bluefy} 安裝模式=${env.standalone} HTTPS=${env.secure} 儲存=${storage.backend}`);
+  const mic = micSupport();
+  logger.info(`麥克風支援：mediaDevices=${mic.mediaDevices} getUserMedia=${mic.getUserMedia} WebAudio=${mic.audioContext}`);
 
   await LogPersister.rotate(storage); // keep the previous session's log (and its report) safe before we start writing ours
   const persister = new LogPersister(logger, storage);
