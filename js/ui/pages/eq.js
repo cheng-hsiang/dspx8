@@ -218,13 +218,16 @@ export function init(ctx, el) {
     const { pairs, dropped, skipped } = presetWritePairs({ ...preset, eq: Object.fromEntries(Object.entries(preset.eq).filter(([k]) => k in groups)) }, st.layer, groups, store, qScale());
     const droppedUnique = Array.from(new Set(dropped.map((d) => `${d.group}:${d.f}`)));
     const ignoredGroups = Object.keys(preset.eq).filter((k) => !(k in groups));
-    const detail = [`載入「${preset.name}」會覆寫前後兩組全部頻段的增益（${pairs.length} 筆寫入）。`,
+    const other = otherHits(); // a preset is the whole EQ: whatever is left on the other layer would stack onto it
+    const allPairs = pairs.concat(flattenPairs(other));
+    const detail = [`載入「${preset.name}」會覆寫前後兩組全部頻段的增益（${allPairs.length} 筆寫入）。`,
+      other.length ? `另一層「${layerInfo(otherLayer(st.layer)).label}」有 ${other.length} 個頻段不是 0 dB，會一起歸零，避免兩層疊加。` : '',
       droppedUnique.length ? `有 ${droppedUnique.length} 個濾波器找不到可用頻段，會被略過：${droppedUnique.map((s) => s.split(':')[1] + ' Hz').join('、')}。` : '',
       skipped.length ? `聲道 CH${skipped.join('、CH')} 沒有啟用的頻段，會被略過。` : '',
       ignoredGroups.length ? `預設裡的群組「${ignoredGroups.join('、')}」不在你的配置中，不會寫入。` : ''].filter(Boolean).join('\n');
     if (confirm && !(await confirmDialog(detail))) return false;
-    logger.info(`載入預設 ${preset.name}：${pairs.length} 筆寫入，略過聲道 ${skipped.join(',') || '無'}，丟棄濾波器 ${droppedUnique.length}`);
-    return writeNow(pairs, `載入 ${preset.name}`);
+    logger.info(`載入預設 ${preset.name}：${allPairs.length} 筆寫入，略過聲道 ${skipped.join(',') || '無'}，丟棄濾波器 ${droppedUnique.length}，另一層歸零 ${other.length}`);
+    return writeNow(allPairs, `載入 ${preset.name}`);
   }
   $('#eq-load').addEventListener('click', () => loadPreset(currentPreset()));
 
@@ -252,7 +255,11 @@ export function init(ctx, el) {
     requestAnimationFrame(() => { raf = false; if (curve.dragging) { renderTable(); return; } renderCurve(); renderControls(); renderTable(); renderOther(); });
   });
   device.on('state', () => { if (device.state === 'disconnected') { sent.clear(); pending.clear(); touched.clear(); } renderAll(); });
-  device.on('dump', () => { sent.clear(); if (!el.hidden) renderAll(); });
+  device.on('dump', () => {
+    sent.clear(); if (!el.hidden) renderAll();
+    const hits = otherHits();
+    if (hits.length) toast(`另一層「${layerInfo(otherLayer(st.layer)).label}」有 ${hits.length} 個頻段不是 0 dB，會和 EQ 疊加。載入預設時會一起歸零，或到 EQ 頁按「歸零另一層增益」。`, 8000);
+  });
   ctx.events.addEventListener('tab', (ev) => { if (ev.detail === 'eq') renderAll(); });
 
   (async () => {

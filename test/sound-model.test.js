@@ -68,3 +68,23 @@ test('inputPair writes M0_8 and currentInput reads the low nibble of M0_22', () 
   assert.throws(() => s.inputPair(9), RangeError);
   assert.equal(s.currentInput(store), INPUT.HIGH_LEVEL); // seeded 0x13
 });
+
+test('masterPairsFrom shifts a FIXED baseline, so a lagging store can never make channels drift apart mid-drag', () => {
+  const store = seeded();
+  const base = s.readLevels(store);
+  assert.equal(base.length, 8);
+  assert.deepEqual(base[0], { vol: 100, flag: true });
+  // real-device log 2026-09-30: fronts ended 11 below the rest because each step re-read a half-updated store
+  store.set(ADDR.mix11(1), 594); store.set(ADDR.mix11(2), 594); store.set(ADDR.mix11(3), 594); // only the first frame echoed so far
+  const step = s.masterPairsFrom(base, 45);
+  assert.ok(step.every((p) => p.val === 585), JSON.stringify(step));
+  const offsets = s.masterPairsFrom([{ vol: 100, flag: true }, { vol: 100, flag: true }, { vol: 100, flag: true }, { vol: 94, flag: true }, { vol: 94, flag: true }, { vol: 94, flag: true }, { vol: 94, flag: true }, { vol: 94, flag: true }], 50);
+  assert.deepEqual(offsets.map((p) => p.val), [590, 590, 590, 584, 584, 584, 584, 584]);
+});
+
+test('alignPairs brings every channel up to the loudest one and only writes the ones that differ', () => {
+  const store = seeded();
+  assert.deepEqual(s.alignPairs(store), []);
+  store.set(ADDR.mix11(1), 589); store.set(ADDR.mix11(2), 589); store.set(ADDR.mix11(3), 589);
+  assert.deepEqual(s.alignPairs(store), [{ addr: ADDR.mix11(1), val: 600 }, { addr: ADDR.mix11(2), val: 600 }, { addr: ADDR.mix11(3), val: 600 }]);
+});

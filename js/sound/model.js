@@ -34,18 +34,29 @@ export function levelPair(store, ch, level) {
   return { addr: ADDR.mix11(ch), val: encodeVol(clamp(Math.round(level), 0, LEVEL_MAX), flag) };
 }
 
-const levels = (store) => Array.from({ length: CH_COUNT }, (_, i) => decodeVol(store.get(ADDR.mix11(i + 1))));
+export const readLevels = (store) => Array.from({ length: CH_COUNT }, (_, i) => decodeVol(store.get(ADDR.mix11(i + 1))));
 
 /** The master knob (0..60) is the loudest channel's level minus the OEM offset of 40. */
 export function masterKnob(store) {
-  return clamp(Math.max(...levels(store).map((v) => v.vol)) - MASTER_VOL_OFFSET, 0, MASTER_VOL_MAX);
+  return clamp(Math.max(...readLevels(store).map((v) => v.vol)) - MASTER_VOL_OFFSET, 0, MASTER_VOL_MAX);
 }
 
-/** Move every channel by the same amount so per-channel offsets survive a master change; each flag is kept as is. */
-export function masterPairs(store, knob) {
-  const cur = levels(store);
-  const delta = decodeVol(encodeMasterVol(knob)).vol - Math.max(...cur.map((v) => v.vol));
-  return cur.map((v, i) => ({ addr: ADDR.mix11(i + 1), val: encodeVol(clamp(v.vol + delta, 0, LEVEL_MAX), v.flag) }));
+/**
+ * Move every channel of a FIXED baseline by the same amount, keeping per-channel offsets and flags.
+ * The UI snapshots the baseline once per drag: recomputing from the live store while echoes were still
+ * arriving let the channel groups drift apart on the real unit (fronts ended 11 below the rest).
+ */
+export function masterPairsFrom(base, knob) {
+  const delta = decodeVol(encodeMasterVol(knob)).vol - Math.max(...base.map((v) => v.vol));
+  return base.map((v, i) => ({ addr: ADDR.mix11(i + 1), val: encodeVol(clamp(v.vol + delta, 0, LEVEL_MAX), v.flag) }));
+}
+export const masterPairs = (store, knob) => masterPairsFrom(readLevels(store), knob);
+
+/** Bring every channel up to the loudest one (undoes accidental offsets); only the channels that differ are written. */
+export function alignPairs(store) {
+  const cur = readLevels(store);
+  const top = Math.max(...cur.map((v) => v.vol));
+  return cur.map((v, i) => ({ addr: ADDR.mix11(i + 1), val: encodeVol(top, v.flag) })).filter((p, i) => p.val !== store.get(ADDR.mix11(i + 1)));
 }
 
 export const delayPairFromCm = (ch, cm) => ({ addr: ADDR.delay(ch), val: cmToDelayRaw(cm) });

@@ -111,6 +111,9 @@ const SCRIPT = `(async () => {
   // the layer not being edited still runs: a curve left on the 10-band layer must be flagged and zeroable
   await window.dspx.device.writeRegs([{ addr: 1254, val: 530 }]);
   out.otherLayerWarned = await until(() => !document.querySelector('#eq-other').hidden && document.querySelector('#eq-other-text').textContent.includes('1 個'));
+  out.presetZeroesOther = (await window.dspx.eq.loadPreset('03 華語抒情', { confirm: false })) && window.dspx.store.get(1254) === 500;
+  await window.dspx.device.writeRegs([{ addr: 1254, val: 530 }]);
+  await until(() => !document.querySelector('#eq-other').hidden);
   out.otherLayerZeroed = (await window.dspx.eq.zeroOtherLayer({ confirm: false })) && window.dspx.store.get(1254) === 500 && (await until(() => document.querySelector('#eq-other').hidden));
   // modes: switch to slot 2 (factory flat), edit, save; the unsaved counter must return to zero and the slot must hold the edit
   out.modeSwitched = await window.dspx.modes.call(2, { confirm: false });
@@ -165,6 +168,18 @@ const SCRIPT_C = `(async () => {
   let mism = 0; for (let a = 138; a < 1226; a++) if (window.dspx.store.getStatus(a) === 3) mism++;
   out.slowMismatches = mism;
   out.slowUiMatchesStore = Math.abs(Number(document.querySelector('#eq-gain').value) - (gFinal - 500) / 10) < 0.05;
+  // master volume: rapid steps on a slow link must not pull the channel groups apart (baseline captured once per drag)
+  document.querySelector('[data-tab="sound"]').click();
+  await sleep(100);
+  const mv = document.querySelector('#vol');
+  for (const v of ['55', '50', '45', '40']) { mv.value = v; mv.dispatchEvent(new Event('input')); await sleep(30); }
+  mv.dispatchEvent(new Event('change'));
+  out.slowMasterAligned = await until(() => [12, 13, 14, 15, 16, 17, 18, 19].every((a) => window.dspx.store.get(a) === 580 && window.dspx.store.getStatus(a) === 1), 15000);
+  out.slowMasterValues = [12, 13, 14, 15, 16, 17, 18, 19].map((a) => window.dspx.store.get(a) + '/' + window.dspx.store.getStatus(a)).join(' ');
+  // delay: typing 30 cm then tapping + right away must step from the typed value, not from the stale store
+  const cmIn = document.querySelector('[data-ch="1"] [data-cm]'); cmIn.value = '30'; cmIn.dispatchEvent(new Event('change'));
+  document.querySelector('[data-ch="1"] [data-dadd]').click();
+  out.slowDelayStep = await until(() => window.dspx.store.get(73) === 896 && window.dspx.store.getStatus(73) === 1, 15000);
   return out;
 })()`;
 
@@ -210,7 +225,8 @@ try {
     slowNoMismatch: result.slowMismatches === 0, slowUiMatchesStore: result.slowUiMatchesStore,
     phaseInverted: result.phaseInverted, phaseRestored: result.phaseRestored, levelWritten: result.levelWritten, delayWritten: result.delayWritten,
     delayStepped: result.delayStepped, inputWritten: result.inputWritten, tabsOnTop: result.tabsOnTop,
-    otherLayerWarned: result.otherLayerWarned, otherLayerZeroed: result.otherLayerZeroed,
+    otherLayerWarned: result.otherLayerWarned, otherLayerZeroed: result.otherLayerZeroed, presetZeroesOther: result.presetZeroesOther,
+    slowMasterAligned: result.slowMasterAligned, slowDelayStep: result.slowDelayStep,
     modeSwitched: result.modeSwitched, modeActive2: result.modeActive2, modeEqFlat: result.modeEqFlat,
     modeUnsavedTracked: result.unsavedBefore > 0 && result.unsavedAfter === 0, modeSaved: result.modeSaved, slotSaved: result.slotSaved,
   };
