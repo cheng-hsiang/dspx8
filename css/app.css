@@ -6,7 +6,7 @@ body { display: flex; flex-direction: column; min-height: 100dvh; }
 .statusbar { display: flex; gap: 12px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; padding-top: calc(10px + env(safe-area-inset-top)); }
 .statusbar .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
 .statusbar .dot.connected { background: var(--ok); } .statusbar .dot.readonly { background: var(--warn); } .statusbar .dot.connecting, .statusbar .dot.switching { background: var(--accent); }
-main { flex: 1; padding: 16px; padding-bottom: 32px; max-width: 900px; width: 100%; margin: 0 auto; }
+main { flex: 1; padding: 16px; padding-bottom: 80px; max-width: 900px; width: 100%; margin: 0 auto; }
 .page h2 { margin: 0 0 12px; font-size: 18px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
 .card h3 { margin: 0 0 10px; font-size: 15px; color: var(--muted); font-weight: 600; }

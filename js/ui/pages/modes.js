@@ -1,4 +1,4 @@
-import { ADDR } from '../../protocol/addrmap.js';
+import { ADDR, CH_COUNT } from '../../protocol/addrmap.js';
 import { STATE } from '../../core/device.js';
 import { toast, confirmDialog } from '../components/dialog.js';
 import { errText } from '../../util/errors.js';
@@ -59,7 +59,9 @@ export function init(ctx, el) {
   async function save({ confirm = true } = {}) {
     const m = current();
     if (!device.canWrite || !known(m)) { toast('未連線或唯讀'); return false; }
-    if (confirm && !(await confirmDialog(`把目前運作中的全部設定寫進模式 ${m}？會覆寫該槽原本的內容。`, { okText: '儲存' }))) return false;
+    const muted = Array.from({ length: CH_COUNT }, (_, i) => store.get(ADDR.muteOfChannel(i + 1)) === 1).filter(Boolean).length;
+    const msg = `把目前運作中的全部設定寫進模式 ${m}？會覆寫該槽原本的內容。${muted ? `目前有 ${muted} 個聲道靜音中，會一起存進模式。` : ''}`;
+    if (confirm && !(await confirmDialog(msg, { okText: '儲存' }))) return false;
     try { await device.saveMode(m); toast(`已儲存到模式 ${m}`); return true; }
     catch (err) { toast(`儲存失敗：${errText(err)}`); return false; }
     finally { render(); }

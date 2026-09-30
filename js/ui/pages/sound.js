@@ -59,6 +59,7 @@ export function init(ctx, el) {
     </div>`;
   }).join('');
   const levelTimers = new Map();
+  const draggingLevels = new Set(); // touch range inputs do not reliably take focus, so track drags explicitly (no snap-back from echoes)
   list.querySelectorAll('.chrow').forEach((row) => {
     const ch = Number(row.dataset.ch);
     const q = (sel) => row.querySelector(sel);
@@ -70,10 +71,11 @@ export function init(ctx, el) {
     q('[data-phase]').addEventListener('click', () => send([phasePair(store, ch, !readChannel(store, ch).inverted)]));
     const level = q('[data-level]');
     level.addEventListener('input', () => {
+      draggingLevels.add(ch);
       q('[data-level-text]').textContent = level.value;
       if (!levelTimers.has(ch)) levelTimers.set(ch, setTimeout(() => { levelTimers.delete(ch); send([levelPair(store, ch, Number(level.value))]); }, 50));
     });
-    level.addEventListener('change', () => send([levelPair(store, ch, Number(level.value))]));
+    level.addEventListener('change', () => { draggingLevels.delete(ch); send([levelPair(store, ch, Number(level.value))]); });
     q('[data-cm]').addEventListener('change', (e) => { const cm = Number(e.target.value); if (Number.isFinite(cm)) send([delayPairFromCm(ch, cm)]); else renderChannels(); });
     q('[data-dsub]').addEventListener('click', () => send([delayPairFromSamples(ch, readChannel(store, ch).samples - 1)]));
     q('[data-dadd]').addEventListener('click', () => send([delayPairFromSamples(ch, readChannel(store, ch).samples + 1)]));
@@ -88,7 +90,7 @@ export function init(ctx, el) {
       q('[data-rename]').textContent = names[ch - 1];
       const mute = q('[data-mute]'); mute.textContent = c.muted ? '已靜音' : '靜音'; mute.className = c.muted ? 'danger' : ''; mute.disabled = !can;
       const phase = q('[data-phase]'); phase.textContent = c.inverted ? '180°' : '0°'; phase.className = c.inverted ? 'warn' : ''; phase.disabled = !can;
-      const level = q('[data-level]'); if (document.activeElement !== level) level.value = c.level; level.disabled = !can; q('[data-level-text]').textContent = String(c.level);
+      const level = q('[data-level]'); if (!draggingLevels.has(ch)) { level.value = c.level; q('[data-level-text]').textContent = String(c.level); } level.disabled = !can;
       const cm = q('[data-cm]'); if (document.activeElement !== cm) cm.value = c.delayCm.toFixed(1); cm.disabled = !can;
       q('[data-dsub]').disabled = !can || c.samples <= 0; q('[data-dadd]').disabled = !can;
       q('[data-delay-text]').textContent = `${c.delayMs.toFixed(3)} ms · ${c.samples} 點`;
