@@ -15,7 +15,7 @@ export function init(ctx, el) {
       <p id="mode-unsaved" class="muted" style="margin:6px 0 0"></p>
       <div class="row" style="margin-top:10px"><button id="mode-save" class="primary">儲存到目前模式</button><button id="mode-rename">命名這個模式</button></div>
     </div>
-    <div class="card"><p class="muted" style="margin:0">8 組都是使用者的儲存槽。點其他模式會叫機器載入那一槽並重新讀取（約 5 秒），沒儲存的調整會被丟掉。建議模式 1 保持原廠平直當備援，調好的音色存到 2 到 5：先切到那個模式，載入預設或調整，再按「儲存到目前模式」。名稱只存在此瀏覽器。</p></div>`;
+    <div class="card"><p class="muted" style="margin:0">機器會自己記住目前的設定，熄火再發動也還在，不用每次儲存。「儲存到模式」是把目前設定另存一份到槽裡，之後可以叫回來。點其他模式會載入那一槽並重新讀取（約 5 秒），目前沒存到任何槽的設定會被蓋掉。不同音色可以分別存到不同的槽。名稱只存在此瀏覽器。</p></div>`;
   const $ = (id) => el.querySelector(id);
   const grid = $('#modes');
   const current = () => store.get(ADDR.M0_MODE);
@@ -41,15 +41,15 @@ export function init(ctx, el) {
     const unsaved = device.canWrite && device.modeBaseline ? device.unsavedChanges().length : 0;
     const p = $('#mode-unsaved');
     if (!device.canWrite || !device.modeBaseline) { p.textContent = ''; p.className = 'muted'; }
-    else if (unsaved) { p.textContent = `有 ${unsaved} 筆設定還沒儲存到模式 ${m}，機器斷電後可能會消失。`; p.className = 'warn'; }
-    else { p.textContent = `目前設定已與模式 ${m} 儲存的內容一致。`; p.className = 'ok'; }
+    else if (unsaved) { p.textContent = `這次連線後改了 ${unsaved} 筆還沒儲存。熄火不會消失，但切到別的模式會被蓋掉。`; p.className = 'warn'; }
+    else { p.textContent = '這次連線後沒有未儲存的改動。'; p.className = 'ok'; }
   };
 
   async function call(n, { confirm = true } = {}) {
     if (!device.canWrite) { toast('未連線或唯讀'); return false; }
     if (n === current()) { toast(`已經在模式 ${n}`); return false; }
     const unsaved = device.unsavedChanges().length;
-    const msg = unsaved ? `切換到模式 ${n}？目前有 ${unsaved} 筆還沒儲存的設定會被丟掉。` : `切換到模式 ${n}？機器會載入該槽的設定並重新讀取，約 5 秒。`;
+    const msg = unsaved ? `切換到模式 ${n}？這次連線後改的 ${unsaved} 筆還沒儲存，會被蓋掉。` : `切換到模式 ${n}？機器會載入該槽的設定並重新讀取，約 5 秒。目前的設定如果沒有存到任何槽，會被蓋掉。`;
     if (confirm && !(await confirmDialog(msg, { okText: '切換' }))) return false;
     try { await device.callMode(n); toast(`已切換到模式 ${n}`); return true; }
     catch (err) { toast(`切換失敗：${errText(err)}`); return false; }
