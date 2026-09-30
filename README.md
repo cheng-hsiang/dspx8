@@ -19,7 +19,7 @@ Yiye lang DSP-X8s 車用 DSP 的 Web Bluetooth 調音網頁。沒有離線快取
 
 ## 部署
 
-GitHub Pages：把本目錄推到 repo 的 `main`，Settings → Pages → Source 選 `main` / root。網址為 `https://<帳號>.github.io/<repo>/`。所有路徑都是相對的，放在子路徑下可正常運作。
+GitHub Pages：repo 是 `https://github.com/cheng-hsiang/dspx8`。Settings → Pages → Source 選「GitHub Actions」。每次推到 `main`，`.github/workflows/pages.yml` 會跑測試、執行 `npm run pack`，然後只把 `dist` 部署成網站，網址 `https://cheng-hsiang.github.io/dspx8/`。所有路徑都是相對的，放在子路徑下可正常運作。
 
 Netlify：先 `npm run pack`，到 app.netlify.com 的 Drop 頁把 `dist` 資料夾拖進去，取得 `https://<名稱>.netlify.app`。更新時到該網站的 Deploys 頁再拖一次。
 
