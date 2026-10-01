@@ -1,5 +1,10 @@
 # DSP-X8s 網頁調音器
 
+**直接使用：<https://cheng-hsiang.github.io/dspx8/>**
+
+- iPhone 請用 [Bluefy](https://apps.apple.com/app/bluefy-web-ble-browser/id1492822055) 開啟，Android 用 Chrome。打開後第一個分頁就是使用說明。
+- 沒有機器也想先看看：<https://cheng-hsiang.github.io/dspx8/?sim=1>（模擬模式，不會連到真的機器）。
+
 Yiye lang DSP-X8s 車用 DSP 的 Web Bluetooth 調音網頁。沒有離線快取，也沒有 Service Worker，每次開啟都需要網路。規格：`docs/superpowers/specs/2026-09-29-dsp-x8s-web-tuner-design.md`，第一階段計畫：`docs/superpowers/plans/2026-09-30-dsp-x8s-phase1-implementation.md`。
 
 ## 需求
