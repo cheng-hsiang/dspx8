@@ -4,6 +4,8 @@
 
 ![Yiye lang DSP-X8s 機器外觀](images/dsp-x8s.jpg)
 
+<sub>照片：Corolla Cross Club 官方社團 Deema Lee 拍攝，拍得很好，借來示意。如果造成困擾，請通知我，我會拿掉。</sub>
+
 適用機型：Yiye lang DSP-X8s（機身印有 DSP-X8s，原廠微信小程序是 ONE-APP）。
 
 - iPhone 請用 [Bluefy](https://apps.apple.com/app/bluefy-web-ble-browser/id1492822055) 開啟，Android 用 Chrome。打開後第一個分頁就是使用說明。

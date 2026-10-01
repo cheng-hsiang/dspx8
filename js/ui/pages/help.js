@@ -21,6 +21,7 @@ export function init(ctx, el) {
       <p class="muted" style="margin:0 0 10px">非官方工具，免費使用，風險自負。</p>
       <img id="help-photo" class="photo" src="./images/dsp-x8s.jpg" width="1200" height="911" loading="lazy" alt="Yiye lang DSP-X8s 機器外觀：黑色機身，正面有 8 個 CH-OUT 接孔和 PC USB 孔">
       <p class="muted" style="margin:6px 0 0">你的機器長這樣，就可以用這個網頁。</p>
+      <p class="muted" id="help-photo-credit" style="margin:4px 0 0;font-size:12px">照片：Corolla Cross Club 官方社團 Deema Lee 拍攝，拍得很好，借來示意。如果造成困擾，請通知我，我會拿掉。</p>
     </div>
 
     <div class="card"><h3>三步開始</h3>
