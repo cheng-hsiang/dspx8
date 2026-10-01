@@ -17,7 +17,7 @@ export function init(ctx, el) {
   const { device, store, logger, storage, env } = ctx;
   el.innerHTML = `
     <h2>藍牙</h2>
-    <p class="muted" id="bt-version">線上版本 ${document.documentElement.dataset.version ?? 'dev'}，不做離線快取，每次開啟需有網路。</p>
+    <p class="muted" id="bt-version">線上版本 ${document.documentElement.dataset.version ?? 'dev'}</p>
     ${env.webBluetooth || ctx.transportKind === 'sim' ? '' : `<div class="banner warn">${browserAdvice(env).text}詳細請看「說明」分頁。</div>`}
     <div class="card"><h3>連線</h3>
       <div class="row"><button id="bt-connect" class="primary">連線</button><button id="bt-disconnect" disabled>斷線</button>

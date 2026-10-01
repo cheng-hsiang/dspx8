@@ -9,7 +9,7 @@
 - iPhone 請用 [Bluefy](https://apps.apple.com/app/bluefy-web-ble-browser/id1492822055) 開啟，Android 用 Chrome。打開後第一個分頁就是使用說明。
 - 沒有機器也想先看看：<https://cheng-hsiang.github.io/dspx8/?sim=1>（模擬模式，不會連到真的機器）。
 
-Yiye lang DSP-X8s 車用 DSP 的 Web Bluetooth 調音網頁。沒有離線快取，也沒有 Service Worker，每次開啟都需要網路。規格：`docs/superpowers/specs/2026-09-29-dsp-x8s-web-tuner-design.md`，第一階段計畫：`docs/superpowers/plans/2026-09-30-dsp-x8s-phase1-implementation.md`。
+Yiye lang DSP-X8s 車用 DSP 的 Web Bluetooth 調音網頁。沒有離線快取，也沒有 Service Worker。規格：`docs/superpowers/specs/2026-09-29-dsp-x8s-web-tuner-design.md`，第一階段計畫：`docs/superpowers/plans/2026-09-30-dsp-x8s-phase1-implementation.md`。
 
 ## 需求
 
@@ -34,7 +34,7 @@ Netlify：先 `npm run pack`，到 app.netlify.com 的 Drop 頁把 `dist` 資料
 
 ## 真機測試（2026-09-30 已完成兩輪：連線、整機讀取、10 段層與 31 段層寫入皆正常）
 
-1. 有網路時開網址（Android 用 Chrome，iPhone 用 Bluefy）。藍牙分頁頂端會顯示版本號。
+1. 開網址（Android 用 Chrome，iPhone 用 Bluefy）。藍牙分頁頂端會顯示版本號。
 2. 車上音量調低。按「連線」，在清單裡選「Mango3.0」，等整機讀取 21 / 21。原廠 App 連著時要先關掉。
 3. 寫入測試：CH1、頻段 3、+6 dB，按「執行寫入測試」，聽是否有變化，然後按「還原為 0 dB」。
 4. 切到「日誌」分頁，按「複製報告摘要」，貼給開發者。複製失敗改用「分享」或「匯出 .txt」。
