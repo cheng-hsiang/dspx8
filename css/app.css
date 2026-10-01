@@ -20,8 +20,8 @@ input[type="range"] { width: 100%; min-height: 44px; }
 .muted { color: var(--muted); } .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); }
 .mono { font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 12.5px; }
 progress { width: 100%; height: 10px; }
-.tabs { display: grid; grid-template-columns: repeat(6, 1fr); background: var(--panel); }
-.tabs button { border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 8px 0; min-height: 48px; font-size: 14px; white-space: nowrap; }
+.tabs { display: flex; overflow-x: auto; scrollbar-width: none; background: var(--panel); } .tabs::-webkit-scrollbar { display: none; }
+.tabs button { flex: 1 0 auto; border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 8px 6px; min-height: 48px; font-size: 14px; white-space: nowrap; }
 .tabs button.active { color: var(--accent); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: #000c; color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 5; max-width: 90vw; }
 dialog { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 12px; max-width: 90vw; }
@@ -43,5 +43,11 @@ textarea.copyfallback { width: 100%; height: 40vh; font-family: ui-monospace, mo
 .meter { height: 8px; background: #0b0f13; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin-top: 10px; }
 .meter > div { height: 100%; width: 0; background: var(--ok); transition: width .1s linear; }
 .steps { margin: 0; padding-left: 20px; } .steps li { margin: 4px 0; }
+.steps.big li { margin: 12px 0; font-size: 16px; line-height: 1.6; } .steps.big li::marker { color: var(--accent); font-weight: 700; }
+ul.plain { margin: 8px 0 4px; padding-left: 20px; } ul.plain li { margin: 6px 0; }
+details { border-bottom: 1px solid var(--line); } details:last-child { border-bottom: 0; }
+summary { cursor: pointer; padding: 12px 0; min-height: 44px; font-weight: 600; }
+a { color: var(--accent); }
+a.btn { display: inline-block; background: var(--accent); color: #04121a; font-weight: 600; text-decoration: none; border-radius: 8px; padding: 10px 14px; }
 .legend span { margin-right: 14px; white-space: nowrap; } .legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 4px; }
 #tu-groups button.active { outline: 2px solid var(--accent); color: var(--accent); }

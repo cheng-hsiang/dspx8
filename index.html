@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant" data-version="0.4.1">
+<html lang="zh-Hant" data-version="0.5.0">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -15,7 +15,8 @@
   <header class="top">
     <div id="statusbar" class="statusbar"></div>
     <nav id="tabs" class="tabs">
-      <button data-tab="bluetooth" class="active">藍牙</button>
+      <button data-tab="help" class="active">說明</button>
+      <button data-tab="bluetooth">藍牙</button>
       <button data-tab="sound">聲音</button>
       <button data-tab="eq">EQ</button>
       <button data-tab="tune">自動調音</button>
@@ -24,7 +25,8 @@
     </nav>
   </header>
   <main id="pages">
-    <section id="page-bluetooth" data-page="bluetooth" class="page"></section>
+    <section id="page-help" data-page="help" class="page"></section>
+    <section id="page-bluetooth" data-page="bluetooth" class="page" hidden></section>
     <section id="page-sound" data-page="sound" class="page" hidden></section>
     <section id="page-eq" data-page="eq" class="page" hidden></section>
     <section id="page-tune" data-page="tune" class="page" hidden></section>

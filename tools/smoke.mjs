@@ -58,6 +58,13 @@ const SCRIPT = `(async () => {
   const until = async (fn, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (fn()) return true; await sleep(50); } return false; };
   const out = { tabs: document.querySelectorAll('#tabs button').length, pages: document.querySelectorAll('[data-page]').length };
   out.booted = await until(() => window.dspx && document.querySelector('#bt-connect'));
+  // a first visit lands on the manual; it must name the right browser, offer a clean share link and fit the tab bar
+  out.helpFirst = document.querySelector('.page:not([hidden])')?.dataset.page === 'help' && document.querySelector('#tabs button.active')?.dataset.tab === 'help';
+  out.helpAdvice = (document.querySelector('#help-advice')?.textContent || '').includes('模擬模式');
+  out.helpUrl = document.querySelector('#help-url')?.textContent || '';
+  out.helpSections = document.querySelectorAll('#page-help details').length;
+  out.helpSteps = document.querySelectorAll('#page-help .steps.big li').length;
+  out.tabsFit = document.querySelector('#tabs').scrollWidth <= document.querySelector('#tabs').clientWidth;
   document.querySelector('#bt-connect').click();
   out.connected = await until(() => (document.querySelector('#bt-status').textContent || '').includes('客戶代碼 4006'));
   out.dumpDone = await until(() => (document.querySelector('#bt-progress-text').textContent || '').startsWith('完成'));
@@ -264,7 +271,7 @@ try {
   try {
     const { writeFile, mkdir } = await import('node:fs/promises');
     await mkdir(join(ROOT, '.smoke'), { recursive: true });
-    for (const tab of ['eq', 'sound', 'modes']) {
+    for (const tab of ['eq', 'sound', 'modes', 'help']) {
       await cdp.evaluate(`document.querySelector('[data-tab="${tab}"]').click(); window.scrollTo(0, 0); true`);
       await sleep(300);
       const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
@@ -293,7 +300,8 @@ try {
   const errors = cdp.events.filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error'))
     .map((e) => e.method === 'Runtime.exceptionThrown' ? e.params.exceptionDetails.exception?.description ?? e.params.exceptionDetails.text : e.params.args.map((a) => a.value ?? a.description).join(' '));
   const checks = {
-    tabs6: result.tabs === 6, pages6: result.pages === 6, booted: result.booted, connected: result.connected, dumpDone: result.dumpDone,
+    tabs7: result.tabs === 7, pages7: result.pages === 7,
+    helpFirst: result.helpFirst, helpAdvice: result.helpAdvice, helpUrlClean: /^http:\/\/localhost:\d+\/$/.test(result.helpUrl), helpSections: result.helpSections >= 10, helpSteps: result.helpSteps === 3, tabsFit: result.tabsFit, booted: result.booted, connected: result.connected, dumpDone: result.dumpDone,
     allConfirmed: result.confirmed === 1613, writeTest: result.writeTest, reportOk: result.reportOk, logHasLines: result.logLines > 10,
     volInitial60: result.volInitial === '60', volWritten: result.volWritten, muteWritten: result.muteWritten, modeActive1: result.modeActive === '1',
     snapshotSaved: result.snapshots >= 1, noConsoleErrors: errors.length === 0,

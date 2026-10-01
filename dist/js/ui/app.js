@@ -6,6 +6,7 @@ import { Storage, LogPersister } from '../core/storage.js';
 import { Device } from '../core/device.js';
 import { errText } from '../util/errors.js';
 import * as statusbar from './statusbar.js';
+import * as helpPage from './pages/help.js';
 import * as bluetoothPage from './pages/bluetooth.js';
 import * as soundPage from './pages/sound.js';
 import * as eqPage from './pages/eq.js';
@@ -14,7 +15,7 @@ import { micSupport } from '../tune/source.js';
 import * as modesPage from './pages/modes.js';
 import * as logPage from './pages/log.js';
 
-const PAGES = { bluetooth: bluetoothPage, sound: soundPage, eq: eqPage, tune: tunePage, modes: modesPage, log: logPage };
+const PAGES = { help: helpPage, bluetooth: bluetoothPage, sound: soundPage, eq: eqPage, tune: tunePage, modes: modesPage, log: logPage };
 
 async function boot() {
   const params = new URLSearchParams(location.search);
@@ -54,9 +55,9 @@ async function boot() {
     ctx.events.dispatchEvent(new CustomEvent('tab', { detail: name }));
   };
   tabs.forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
-  let initial = 'bluetooth';
+  let initial = 'help'; // a first-time visitor (a friend who got the link) lands on the manual
   try { initial = localStorage.getItem('tab') || initial; } catch { /* ignore */ }
-  show(PAGES[initial] ? initial : 'bluetooth');
+  show(PAGES[initial] ? initial : 'help');
 
 
   window.dspx = ctx; // 供開發者在 console 檢查

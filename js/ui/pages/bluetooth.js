@@ -3,6 +3,7 @@ import { buildReport } from '../../core/report.js';
 import { ADDR } from '../../protocol/addrmap.js';
 import { toast, confirmDialog } from '../components/dialog.js';
 import { errText } from '../../util/errors.js';
+import { browserAdvice } from '../../help/advice.js';
 import { renderRegTable } from '../components/regtable.js';
 
 function download(filename, text, type = 'application/json') {
@@ -17,7 +18,7 @@ export function init(ctx, el) {
   el.innerHTML = `
     <h2>藍牙</h2>
     <p class="muted" id="bt-version">線上版本 ${document.documentElement.dataset.version ?? 'dev'}，不做離線快取，每次開啟需有網路。</p>
-    ${env.webBluetooth || ctx.transportKind === 'sim' ? '' : '<div class="banner warn">此瀏覽器不支援 Web Bluetooth。Android 請用 Chrome 或 Edge，iPhone 請安裝 Bluefy 瀏覽器開啟本頁。</div>'}
+    ${env.webBluetooth || ctx.transportKind === 'sim' ? '' : `<div class="banner warn">${browserAdvice(env).text}詳細請看「說明」分頁。</div>`}
     <div class="card"><h3>連線</h3>
       <div class="row"><button id="bt-connect" class="primary">連線</button><button id="bt-disconnect" disabled>斷線</button>
         <label><input type="checkbox" id="bt-filter"> 只列出有 ae00 服務的裝置（機器通常不會出現）</label></div>
