@@ -19,7 +19,7 @@ export const NOTE_TEXT = Object.freeze({
   low: '太低，手機量不準，不修正',
   high: '太高，不修正',
   snr: '噪音蓋過訊號，不修正',
-  mic: '麥克風收不到這段，不修正',
+  mic: '幾乎沒有訊號（麥克風或喇叭），不修正',
   'low-cut': '低頻只衰減',
   'rear-hf': '後門沒有高音，只衰減',
   dip: '窄凹陷（聲波抵消），不補',
@@ -61,7 +61,7 @@ export function rmsToTarget(values, target, centers = TUNE_F, lo = 63, hi = 1000
  *   with K chosen so the mid bands stay where they are (shape, not level).
  * Rear only: when a front measurement exists, the rear is also cut so it plays 3 dB under the front.
  * strength < 1 (Q not verified yet) moves only part of the way from the current EQ.
- * maxHz: the microphone delivers nothing from this (nominal) frequency up, so those bands are left alone.
+ * maxHz: hardly any signal arrives from this (nominal) frequency up (microphone or speaker), so those bands are left alone.
  */
 export function planCorrection({ measured, eqOld, target, group = 'front', strength = 1, ambient = null, frontMid = null, maxHz = null, centers = TUNE_F, q = TUNE_Q, fs = FS }) {
   const n = centers.length;

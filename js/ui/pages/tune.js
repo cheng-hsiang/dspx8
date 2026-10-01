@@ -611,7 +611,7 @@ export function init(ctx, el) {
       if (plan.before < 1) parts.push('已經很接近目標，不用再套用。');
       if (plan.strength < 1) { parts.push('Q 值還沒驗證，套用只做一半的修正。'); cls = 'warn'; }
       if (plan.maxBoost > 0.5) parts.push(`有頻段提升到 ${signed(plan.maxBoost)} dB，開很大聲時注意破音。`);
-      if (plan.maxHz) parts.push(`麥克風在 ${fmtHz(plan.maxHz)}Hz 以上收不到聲音，這些頻段不修正。`);
+      if (plan.maxHz) parts.push(`${fmtHz(plan.maxHz)}Hz 以上幾乎沒有訊號（麥克風收不到，或喇叭沒有這麼高的聲音），這些頻段不修正。`);
       const chs = channelsOf(g);
       if (chs.length > 1 && chs.some((ch) => eqSignature(store, ch) !== eqSignature(store, chs[0]))) parts.push(`CH${chs.join('、CH')} 目前的 EQ 不一樣，計算以 CH${chs[0]} 為準，套用後會一樣。`);
       text = parts.join('');

@@ -62,7 +62,7 @@ test('time weighting F and S follow IEC 61672-1: toneburst responses and decay r
     feed(bank, x, 64, (b) => { max = Math.max(max, b[key][idx]); });
     return dbfs(max) - steady;
   };
-  // reference toneburst responses, IEC 61672-1 table 4 (= 10·lg(1 − e^(−T/τ)))
+  // toneburst responses per IEC 61672-1: 10·lg(1 − e^(−T/τ)); the 200 ms values are the ones the standard tabulates
   assert.ok(Math.abs(burstMax(200, 'fast') + 1.0) < 0.3, `F 200 ms: ${burstMax(200, 'fast').toFixed(2)}`);
   assert.ok(Math.abs(burstMax(50, 'fast') + 4.8) < 0.3, `F 50 ms: ${burstMax(50, 'fast').toFixed(2)}`);
   assert.ok(Math.abs(burstMax(500, 'slow') + 4.1) < 0.3, `S 500 ms: ${burstMax(500, 'slow').toFixed(2)}`);
