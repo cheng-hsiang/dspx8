@@ -1,34 +1,18 @@
 import { DEVICE_EQ_F } from '../protocol/factory.js';
 
-/** Analysis bands = the DSP's own 31 band centres, so a measured band maps 1:1 onto an EQ band. */
+/**
+ * The DSP's own 31 band centres: what the fitter models and what is written back to the device.
+ * The analyser measures the IEC 61260-1 1/3-octave bands (iec.js); each DSP centre lies inside the IEC band
+ * of the same index, so a measured band maps 1:1 onto an EQ band.
+ */
 export const TUNE_F = DEVICE_EQ_F;
-export const SIXTH = 2 ** (1 / 6);
 export const MID_LO = 400;
 export const MID_HI = 2600;
 
-export const bandEdges = (fc) => [fc / SIXTH, fc * SIXTH];
+/** Mean square of sample values → dBFS as AES17 defines it: a full-scale sine reads 0 dBFS. */
+export const dbfs = (meanSquare) => (meanSquare > 0 ? 10 * Math.log10(2 * meanSquare) : -200);
 
-/**
- * Sum FFT bin power (dB per bin, as AnalyserNode.getFloatFrequencyData returns) inside each 1/3-octave band.
- * A band too narrow to contain a bin centre takes its nearest bin scaled to the band width.
- */
-export function spectrumToBands(dbBins, sampleRate, fftSize, centers = TUNE_F) {
-  const binHz = sampleRate / fftSize;
-  const last = dbBins.length - 1;
-  const pw = (k) => { const v = dbBins[k]; return Number.isFinite(v) ? 10 ** (v / 10) : 0; };
-  const out = new Float64Array(centers.length);
-  centers.forEach((fc, i) => {
-    const [lo, hi] = bandEdges(fc);
-    const k0 = Math.max(1, Math.ceil(lo / binHz)), k1 = Math.min(last, Math.ceil(hi / binHz) - 1);
-    let sum = 0;
-    if (k1 >= k0) for (let k = k0; k <= k1; k++) sum += pw(k);
-    else { const k = Math.min(last, Math.max(1, Math.round(fc / binHz))); sum = pw(k) * ((hi - lo) / binHz); }
-    out[i] = sum > 0 ? 10 * Math.log10(sum) : -200;
-  });
-  return out;
-}
-
-/** Running power average of band frames. */
+/** Running power average of band frames of equal duration: the equivalent level (Leq) of the whole run. */
 export class BandAverager {
   constructor(n = TUNE_F.length) { this.acc = new Float64Array(n); this.count = 0; }
   add(bands) { for (let i = 0; i < this.acc.length; i++) this.acc[i] += 10 ** (bands[i] / 10); this.count++; }
@@ -39,6 +23,31 @@ export function powerAverage(list) {
   const avg = new BandAverager(list[0]?.length ?? TUNE_F.length);
   for (const b of list) avg.add(b);
   return avg.mean();
+}
+
+/**
+ * Time weightings F (125 ms) and S (1 s) applied to band levels that arrive one frame at a time. The real
+ * analyser weights every sample (rta-worklet.js); this is for sources that only have frames (the simulated car).
+ */
+export class BandWeighter {
+  constructor(n, frameSec) {
+    this.fastP = new Float64Array(n); this.slowP = new Float64Array(n);
+    this.aF = 1 - Math.exp(-frameSec / 0.125); this.aS = 1 - Math.exp(-frameSec / 1);
+    this.started = false;
+  }
+
+  /** Returns { fast, slow } in dB after taking in one frame of band levels (dB). */
+  push(bands) {
+    for (let i = 0; i < this.fastP.length; i++) {
+      const p = 10 ** (bands[i] / 10);
+      if (!this.started) { this.fastP[i] = p; this.slowP[i] = p; continue; }
+      this.fastP[i] += this.aF * (p - this.fastP[i]);
+      this.slowP[i] += this.aS * (p - this.slowP[i]);
+    }
+    this.started = true;
+    const toDb = (p) => (p > 0 ? 10 * Math.log10(p) : -200);
+    return { fast: Float64Array.from(this.fastP, toDb), slow: Float64Array.from(this.slowP, toDb) };
+  }
 }
 
 /** Mean (in dB) of the bands between 400 Hz and 2.6 kHz: the reference that corrections are normalised to. */

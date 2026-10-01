@@ -1,40 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TUNE_F, bandEdges, spectrumToBands, BandAverager, powerAverage, midLevel, formatBands } from '../js/tune/bands.js';
+import { TUNE_F, BandAverager, BandWeighter, powerAverage, midLevel, formatBands } from '../js/tune/bands.js';
 import { DEVICE_EQ_F } from '../js/protocol/factory.js';
 
-function spectrum(fn, sampleRate = 48000, fftSize = 32768) {
-  const n = fftSize / 2, out = new Float32Array(n);
-  for (let k = 0; k < n; k++) out[k] = k === 0 ? -Infinity : fn((k * sampleRate) / fftSize);
-  return out;
-}
-
-test('tune bands are the DSP factory 31-band centres with 1/3-octave edges', () => {
+test('tune bands are the DSP factory 31-band centres', () => {
   assert.equal(TUNE_F.length, 31);
   assert.deepEqual(TUNE_F, DEVICE_EQ_F);
-  const [lo, hi] = bandEdges(1000);
-  assert.ok(Math.abs(hi / lo - 2 ** (1 / 3)) < 1e-9);
-  assert.ok(Math.abs(Math.sqrt(lo * hi) - 1000) < 1e-9);
-});
-
-test('pink noise (−10 dB/decade per FFT bin) reads flat per 1/3-octave band from 125 Hz up', () => {
-  const pink = spectrumToBands(spectrum((f) => -10 * Math.log10(f)), 48000, 32768);
-  const upper = Array.from(pink.slice(8, 31)); // 125 Hz .. 20.2 kHz
-  assert.ok(Math.max(...upper) - Math.min(...upper) < 0.6, upper.map((v) => v.toFixed(2)).join(' '));
-});
-
-test('white noise band power grows with band width (∝ centre frequency)', () => {
-  const white = spectrumToBands(spectrum(() => 0), 48000, 32768);
-  for (let i = 12; i < 30; i++) {
-    const expected = 10 * Math.log10(TUNE_F[i + 1] / TUNE_F[i]);
-    assert.ok(Math.abs(white[i + 1] - white[i] - expected) < 0.25, `band ${i}: ${(white[i + 1] - white[i]).toFixed(2)} vs ${expected.toFixed(2)}`);
-  }
-});
-
-test('works at 44.1 kHz and a smaller FFT, and never returns NaN for the lowest bands', () => {
-  const b = spectrumToBands(spectrum((f) => -10 * Math.log10(f), 44100, 8192), 44100, 8192);
-  assert.equal(b.length, 31);
-  assert.ok(Array.from(b).every(Number.isFinite));
 });
 
 test('BandAverager averages power, not decibels', () => {
@@ -46,6 +17,18 @@ test('BandAverager averages power, not decibels', () => {
   assert.ok(Math.abs(m[1] + 10) < 1e-9);
   const p = powerAverage([[0, 0], [10, 0]]);
   assert.ok(Math.abs(p[0] - m[0]) < 1e-9);
+});
+
+test('BandWeighter: frame-rate F and S weightings start at the first frame and decay at the IEC rates', () => {
+  const w = new BandWeighter(2, 0.1);
+  let out = w.push([-20, -40]);
+  assert.ok(Math.abs(out.fast[0] + 20) < 1e-9 && Math.abs(out.slow[1] + 40) < 1e-9);
+  for (let i = 0; i < 50; i++) out = w.push([-20, -40]);
+  assert.ok(Math.abs(out.fast[0] + 20) < 1e-6);
+  const before = out;
+  for (let i = 0; i < 5; i++) out = w.push([-200, -200]); // 0.5 s of silence
+  assert.ok(Math.abs((before.fast[0] - out.fast[0]) / 0.5 - 34.7) < 0.5, 'F: 34.7 dB/s');
+  assert.ok(Math.abs((before.slow[0] - out.slow[0]) / 0.5 - 4.34) < 0.1, 'S: 4.34 dB/s');
 });
 
 test('midLevel averages the 405 Hz – 2.52 kHz bands; formatBands is compact and labelled', () => {

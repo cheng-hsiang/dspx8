@@ -53,3 +53,4 @@ img.photo { display: block; width: 100%; height: auto; border-radius: 10px; bord
 a.btn { display: inline-block; background: var(--accent); color: #04121a; font-weight: 600; text-decoration: none; border-radius: 8px; padding: 10px 14px; }
 .legend span { margin-right: 14px; white-space: nowrap; } .legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 4px; }
 #tu-groups button.active { outline: 2px solid var(--accent); color: var(--accent); }
+.seg { gap: 8px; margin-top: 8px; } .seg > span { min-width: 2.5em; } .seg button.active { outline: 2px solid var(--accent); color: var(--accent); }

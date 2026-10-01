@@ -1,7 +1,10 @@
 import { LAYERS, effectiveQScale, bandAddrs } from '../../eq/model.js';
 import { ADDR, CH_COUNT } from '../../protocol/addrmap.js';
 import { QRATE, encodeFreq, encodeGain } from '../../protocol/codec.js';
-import { TUNE_F, BandAverager, powerAverage, midLevel, formatBands, fmtHz } from '../../tune/bands.js';
+import { TUNE_F, BandAverager, powerAverage, formatBands, fmtHz } from '../../tune/bands.js';
+import { THIRD_NOMINAL, THIRD_EXACT, OCTAVE_NOMINAL, weightBands, toOctaves, totalDb, iecEdges, randomErrorDb } from '../../tune/iec.js';
+import { micCheck, micLimitHz } from '../../tune/mic-check.js';
+import { parseMicCal, calAtBands } from '../../tune/mic-cal.js';
 import { bandAvgResponse, filtersFromStore } from '../../tune/fit.js';
 import { targetCurve, planCorrection, tuneWritePairs, judgeQ, eqSignature, qRawFor, midRef, TUNE_Q, NOTE_TEXT } from '../../tune/plan.js';
 import { pinkNoise, wavBytes } from '../../tune/noise.js';
@@ -13,6 +16,12 @@ import { errText } from '../../util/errors.js';
 const GROUP_NAME = { front: '前', rear: '後', all: '全部' };
 const COLORS = { now: '#29b6f6', target: '#8b98a5', after: '#4caf50' };
 const Q_TEST_BAND = 18; // 1 kHz
+const RTA_SPAN_DB = 70;
+const TIME_LETTER = { fast: 'F', slow: 'S', leq: 'eq' };
+const RTA_HINT = {
+  fast: '快（F）：時間常數 125 毫秒，反應快，適合看聲音的變化。',
+  slow: '慢（S）：時間常數 1 秒，數字比較穩。',
+};
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const signed = (v, d = 1) => { const t = v.toFixed(d); return Number(t) === 0 ? (0).toFixed(d) : `${v > 0 ? '+' : ''}${t}`; };
 
@@ -30,7 +39,10 @@ export function init(ctx, el) {
     group: 'front', groups: { front: [1, 2], rear: [3, 4] },
     target: { bassDb: 6, trebleDb: -2 },
     runs: { front: [], rear: [], all: [] }, ambient: null,
-    manualMutes: null, q: null, qMode: 'auto', lastApply: null, latest: null, rta: null,
+    manualMutes: null, q: null, qMode: 'auto', lastApply: null, latest: null, shown: null,
+    view: { time: 'slow', weight: 'Z', fraction: 3, hold: false, paused: false },
+    live: { leq: new BandAverager(31), sec: 0, hold: null },
+    cal: { splOffset: null, mic: null }, check: null, micWarn: '', axisMax: null,
     collector: null, cancel: null,
   };
 
@@ -46,12 +58,34 @@ export function init(ctx, el) {
         <li>手機放在駕駛座頭部的位置，量測時不要碰它，也不要切到別的 App（切走會中斷量測）。前後聲道都量完之前不要改音量。</li>
       </ol>
     </div>
-    <div class="card"><h3>1. 麥克風</h3>
+    <div class="card"><h3>1. 麥克風與即時頻譜（RTA）</h3>
       <div class="row"><button id="tu-mic" class="primary">開啟麥克風</button><button id="tu-mic-off">關閉</button></div>
       <p id="tu-mic-status" class="muted" style="margin:8px 0 0"></p>
+      <p id="tu-mic-warn" class="warn" style="margin:6px 0 0" hidden></p>
       <div class="meter"><div id="tu-meter"></div></div>
       <p id="tu-level" class="mono muted" style="margin:4px 0 8px"></p>
-      <canvas id="tu-rta" class="eq-canvas" style="height:150px"></canvas>
+      <canvas id="tu-rta" class="eq-canvas" style="height:210px"></canvas>
+      <p id="tu-rta-info" class="muted" style="margin:6px 0 8px"></p>
+      <div class="row seg" id="tu-time"><span class="muted">速度</span><button data-time="fast">快 F</button><button data-time="slow">慢 S</button><button data-time="leq">平均 Leq</button></div>
+      <div class="row seg" id="tu-weight"><span class="muted">計權</span><button data-weight="Z">Z 不計權</button><button data-weight="A">A</button><button data-weight="C">C</button></div>
+      <div class="row seg" id="tu-frac"><span class="muted">頻寬</span><button data-frac="3">1/3 倍頻</button><button data-frac="1">1/1 倍頻</button></div>
+      <div class="row seg"><button id="tu-hold">峰值保持</button><button id="tu-pause">暫停</button><button id="tu-rta-reset">重設</button><button id="tu-rta-log">寫入日誌</button></div>
+      <details id="tu-cal"><summary>校正（進階，可以不做）</summary>
+        <p class="muted" style="margin:0 0 8px">沒校正時，數字是 dBFS（相對值）。看頻譜的形狀、比較調整前後、自動調音，都不受影響。</p>
+        <div class="row"><label>音壓計現在的讀數 <input id="tu-spl" type="number" inputmode="decimal" step="0.1" style="width:84px"> dB</label><button id="tu-spl-set">校正音量</button><button id="tu-spl-clear">取消</button></div>
+        <p id="tu-spl-status" class="muted" style="margin:6px 0 10px"></p>
+        <div class="row"><button id="tu-calfile-pick">載入麥克風校正檔</button><button id="tu-cal-clear">移除</button><input id="tu-calfile" type="file" accept=".txt,.cal,.frd,.csv,text/plain" hidden></div>
+        <p id="tu-cal-status" class="muted" style="margin:6px 0 10px"></p>
+      </details>
+      <details><summary>這個頻譜分析儀依據的標準</summary>
+        <ul class="plain">
+          <li><b>頻段與濾波器</b>：IEC 61260-1:2014（同 ANSI S1.11）的 1/3 倍頻濾波器，中心頻率 20 Hz 到 20 kHz 共 31 段。每段是 6 階 Butterworth 帶通，設計值通過 class 1 的容差檢驗。1/1 倍頻由三個 1/3 倍頻相加。</li>
+          <li><b>時間計權</b>：IEC 61672-1 的 F（125 毫秒）、S（1 秒），以及等效位準 Leq。</li>
+          <li><b>頻率計權</b>：IEC 61672-1 的 A、C、Z，依各頻段的中心頻率套用。</li>
+          <li><b>dBFS</b>：依 AES17，滿刻度的正弦波是 0 dBFS。</li>
+          <li><b>限制</b>：手機內建的麥克風沒有經過校正，整套系統不是檢定過的音壓計。看頻譜形狀、比較調整前後是可靠的；要看絕對音壓，需要外接量測麥克風並做上面的校正。</li>
+        </ul>
+      </details>
     </div>
     <div class="card"><h3>2. 粉紅噪音</h3>
       <p class="muted" style="margin:0 0 8px">粉紅噪音每個八度的能量一樣，量出來的高低就是車子本身的聲音。最方便是用另一支手機或平板連車上藍牙，播放 YouTube 的「pink noise」。也可以在電腦上下載下面的檔案放進隨身碟，插在車機或 DSP 的 USB 重複播放。</p>
@@ -113,12 +147,109 @@ export function init(ctx, el) {
   }
 
   // ---- measurement engine
-  function onFrame(frame) {
+  /** Subtract the microphone's own response (a loaded calibration file) from every level of a frame. */
+  function calibrated(frame) {
+    const corr = st.cal.mic?.corr;
+    if (!corr) return frame;
+    const fix = (a) => Float64Array.from(a, (v, i) => (v > -199 ? v - corr[i] : v));
+    return { ...frame, bands: fix(frame.bands), fast: fix(frame.fast), slow: fix(frame.slow) };
+  }
+  function onFrame(raw) {
+    const frame = calibrated(raw);
     st.latest = frame;
-    const p = frame.bands.map((b) => 10 ** (b / 10));
-    st.rta = st.rta ? st.rta.map((v, i) => 0.75 * v + 0.25 * p[i]) : p;
+    runCheck(frame);
+    if (!st.view.paused) {
+      st.shown = frame;
+      st.live.leq.add(frame.bands); st.live.sec += frame.sec;
+      if (st.view.hold) { const v = rtaView(); st.live.hold = st.live.hold && st.live.hold.length === v.values.length ? st.live.hold.map((h, i) => Math.max(h, v.values[i])) : Float64Array.from(v.values); }
+    }
     st.collector?.(frame);
     scheduleLive();
+  }
+  /** The first seconds of a freshly opened microphone: is there any sound at all, and how far up does it go. */
+  function runCheck(frame) {
+    const c = st.check;
+    if (!c) return;
+    c.avg.add(frame.bands); c.sec += frame.sec; c.peak = Math.max(c.peak, frame.peakDb);
+    if (c.sec < 2.5) return;
+    st.check = null;
+    const bands = c.avg.mean();
+    const r = micCheck({ peakDb: c.peak, bands });
+    if (r.silent) {
+      st.micWarn = '麥克風有開，但收到的全是靜音。這是 iPhone 上 Bluefy 這類瀏覽器的已知限制。請改用下方「麥克風在這個瀏覽器不能用時」的方法，用 Safari 量。';
+      logger.error('麥克風檢查：2.5 秒內的取樣全部是 0。瀏覽器給了權限，但沒有把聲音送進 Web Audio（WKWebView 的已知問題，WebKit bug 196293）');
+    } else {
+      logger.info(`麥克風檢查：峰值 ${c.peak.toFixed(1)} dBFS；1/3 倍頻 Leq（dBFS）${formatBands(bands, THIRD_NOMINAL)}`);
+      if (r.limitHz) {
+        st.micWarn = `這個瀏覽器把 ${fmtHz(r.limitHz)}Hz 以上的聲音濾掉了，這些頻段量不到，自動調音不會修正它們。`;
+        logger.warn(`麥克風檢查：${fmtHz(r.limitHz)}Hz 以上沒有訊號，可能是瀏覽器的語音處理或擷取取樣率造成`);
+      }
+    }
+    renderMic();
+  }
+
+  // ---- analyser display
+  /** What the display shows now: band levels with the chosen time weighting, frequency weighting and bandwidth. */
+  function rtaView() {
+    if (!st.shown) return null;
+    const v = st.view, off = st.cal.splOffset ?? 0;
+    const shape = (thirds) => { const w = weightBands(thirds, v.weight); return (v.fraction === 1 ? toOctaves(w) : w).map((x) => x + off); };
+    const thirds = v.time === 'leq' ? st.live.leq.mean() : st.shown[v.time];
+    return {
+      values: shape(thirds), floor: st.ambient ? shape(st.ambient) : null,
+      freqs: v.fraction === 1 ? OCTAVE_NOMINAL : THIRD_NOMINAL,
+      total: totalDb(weightBands(thirds, v.weight)) + off,
+      label: `L${v.weight}${TIME_LETTER[v.time]}`, unit: st.cal.splOffset === null ? 'dBFS' : 'dB',
+      dim: v.fraction === 3 && st.info?.bandOk ? st.info.bandOk.map((ok) => !ok) : null,
+    };
+  }
+  function resetRta() { st.live = { leq: new BandAverager(31), sec: 0, hold: null }; st.axisMax = null; }
+  function setView(patch) {
+    Object.assign(st.view, patch);
+    if ('weight' in patch || 'fraction' in patch || 'time' in patch || 'hold' in patch) st.live.hold = null;
+    if ('weight' in patch || 'fraction' in patch) st.axisMax = null;
+    const { time, weight, fraction, hold } = st.view;
+    storage.put('settings', 'tuneView', { time, weight, fraction, hold }).catch(() => {});
+    renderRta(); renderLive();
+  }
+  function logRta() {
+    const v = rtaView();
+    if (!v) { toast('先開啟麥克風'); return false; }
+    logger.info(`RTA ${v.label}（${st.view.fraction === 1 ? '1/1' : '1/3'} 倍頻，${v.unit}）總和 ${v.total.toFixed(1)}：${formatBands(v.values, v.freqs)}`);
+    toast('目前的頻譜已寫入日誌');
+    return true;
+  }
+
+  // ---- calibration: an overall offset to sound pressure level, and a microphone response file
+  const saveCal = () => storage.put('settings', 'tuneCal', { splOffset: st.cal.splOffset, mic: st.cal.mic ? { name: st.cal.mic.name, points: st.cal.mic.points } : null }).catch(() => {});
+  /** The display should read `reading` dB right now (what a sound level meter next to the phone shows). */
+  function setSplOffset(reading) {
+    if (reading === null) { st.cal.splOffset = null; logger.info('RTA：取消音量校正'); }
+    else {
+      const v = rtaView();
+      if (!v) { toast('先開啟麥克風'); return false; }
+      if (!Number.isFinite(reading) || reading < 20 || reading > 140) { toast('請輸入 20 到 140 之間的數字'); return false; }
+      st.cal.splOffset = reading - (v.total - (st.cal.splOffset ?? 0));
+      logger.info(`RTA：音量校正，${v.label} 現在是 ${reading} dB，0 dBFS = ${st.cal.splOffset.toFixed(1)} dB`);
+    }
+    st.axisMax = null; st.live.hold = null;
+    saveCal(); renderRta(); renderLive();
+    return true;
+  }
+  function loadCalText(name, text) {
+    let points;
+    try { points = parseMicCal(text); } catch (err) { toast(errText(err), 4000); return false; }
+    setMicCal({ name, points });
+    logger.info(`RTA：載入麥克風校正檔 ${name}（${points.length} 點，${fmtHz(points[0].f)}–${fmtHz(points[points.length - 1].f)} Hz）`);
+    saveCal();
+    return true;
+  }
+  /** A different microphone response makes earlier measurements incomparable, so they are dropped. */
+  function setMicCal(cal) {
+    st.cal.mic = cal ? { name: cal.name, points: cal.points, corr: calAtBands(cal.points) } : null;
+    if (st.runs.front.length || st.runs.rear.length || st.runs.all.length || st.ambient) toast('校正檔變了，之前的量測已清除');
+    st.runs = { front: [], rear: [], all: [] }; st.ambient = null;
+    resetRta(); renderAll();
   }
   function collect(sec) {
     return new Promise((resolve, reject) => {
@@ -139,13 +270,22 @@ export function init(ctx, el) {
     const src = useSim ? new SimSource({ regs: device.transport.regs, qScale: simQScale }) : new MicSource();
     try {
       const info = await src.open(); // MicSource creates its AudioContext before its first await: still inside the tap
-      st.source = src; st.info = info; st.micError = '';
+      st.source = src; st.info = info; st.micError = ''; st.micWarn = '';
+      resetRta();
       src.start(onFrame);
       if (info.kind === 'sim') logger.info('自動調音：使用模擬車廂（?sim=1）');
       else {
         const s = info.settings;
-        logger.info(`麥克風已開啟：取樣率 ${info.sampleRate} Hz，FFT ${info.fftSize}，echoCancellation=${s.echoCancellation} noiseSuppression=${s.noiseSuppression} autoGainControl=${s.autoGainControl}${info.label ? `，裝置 ${info.label}` : ''}`);
+        st.check = { avg: new BandAverager(31), sec: 0, peak: -200 };
+        src.onState = (state) => logger.info(`音訊狀態：${state}`);
+        logger.info(`麥克風已開啟：取樣率 ${info.sampleRate} Hz，擷取 ${info.capture}${info.captureNote ? `（${info.captureNote}）` : ''}，IEC 61260-1 1/3 倍頻濾波器 ${info.bandOk.filter(Boolean).length}/31 段，echoCancellation=${s.echoCancellation} noiseSuppression=${s.noiseSuppression} autoGainControl=${s.autoGainControl} 軌道取樣率=${s.sampleRate}${info.label ? `，裝置 ${info.label}` : ''}`);
         if (s.echoCancellation || s.noiseSuppression || s.autoGainControl) logger.warn('麥克風的語音處理沒有完全關閉，量測會偏');
+        setTimeout(() => {
+          if (st.source !== src || st.latest) return;
+          st.micWarn = '麥克風開了，但沒有收到任何聲音資料。請關閉後再開一次；還是不行就改用下方「麥克風在這個瀏覽器不能用時」的方法。';
+          logger.error('麥克風檢查：開啟 3 秒後仍然沒有收到任何音訊資料');
+          renderMic();
+        }, 3000);
       }
     } catch (err) {
       st.micError = `${err?.name && err.name !== 'Error' ? `${err.name}：` : ''}${errText(err)}`;
@@ -156,7 +296,7 @@ export function init(ctx, el) {
   }
   async function closeMic() {
     st.cancel?.();
-    const s = st.source; st.source = null; st.info = null; st.latest = null; st.rta = null;
+    const s = st.source; st.source = null; st.info = null; st.latest = null; st.shown = null; st.check = null; st.micWarn = '';
     await s?.close();
     renderAll();
   }
@@ -258,8 +398,9 @@ export function init(ctx, el) {
     if (memo.key === key) return memo.plan;
     const measured = powerAverage(runs.map((r) => r.bands));
     const frontMid = g === 'rear' && fronts.length ? midRef(powerAverage(fronts.map((r) => r.raw))) : null;
-    const plan = planCorrection({ measured, eqOld: eqOldFor(g), target: targetCurve(st.target), group: g, strength: strength(), ambient: st.ambient, frontMid });
-    plan.measured = measured; plan.runs = runs.length;
+    const maxHz = micLimitHz(measured);
+    const plan = planCorrection({ measured, eqOld: eqOldFor(g), target: targetCurve(st.target), group: g, strength: strength(), ambient: st.ambient, frontMid, maxHz });
+    plan.measured = measured; plan.runs = runs.length; plan.maxHz = maxHz;
     memo = { key, plan };
     return plan;
   }
@@ -375,23 +516,52 @@ export function init(ctx, el) {
     else if (st.info) {
       const s = st.info.settings;
       const off = [s.echoCancellation, s.noiseSuppression, s.autoGainControl].every((v) => v === false);
-      text = `麥克風已開啟，取樣率 ${st.info.sampleRate} Hz。${off ? '語音處理已關閉。' : '瀏覽器沒有確認已關閉語音處理，結果可能偏。'}`;
+      text = `麥克風已開啟，取樣率 ${st.info.sampleRate} Hz。${off ? '語音處理已關閉。' : '瀏覽器沒有確認已關閉語音處理，結果可能偏。'}${st.info.bandOk.every(Boolean) ? '' : '取樣率不夠高，最高的頻段（灰色）量不準。'}`;
     } else if (st.micError) text = `麥克風無法開啟：${st.micError}。請改用下方「麥克風在這個瀏覽器不能用時」的方法。`;
     else if (!useSim && !sup.getUserMedia) text = '這個瀏覽器不提供麥克風。請改用下方「麥克風在這個瀏覽器不能用時」的方法。';
     else text = '按「開啟麥克風」後，瀏覽器會詢問是否允許使用麥克風。';
     $('#tu-mic-status').textContent = text;
+    $('#tu-mic-warn').textContent = st.micWarn; $('#tu-mic-warn').hidden = !st.micWarn;
   }
   function renderLive() {
-    const lv = st.latest?.levelDb;
+    const f = st.shown, v = rtaView();
     const bar = $('#tu-meter');
-    if (Number.isFinite(lv)) {
+    if (f && v) {
+      const lv = f.levelDb, over = f.peakDb > -1, quiet = lv < -55;
       bar.style.width = `${Math.max(0, Math.min(100, ((lv + 80) / 80) * 100))}%`;
-      bar.style.background = lv > -6 ? 'var(--err)' : lv < -55 ? 'var(--warn)' : 'var(--ok)';
-      $('#tu-level').textContent = `${lv.toFixed(0)} dBFS${lv < -55 ? '　太小聲' : lv > -6 ? '　太大聲，可能失真' : ''}`;
+      bar.style.background = over ? 'var(--err)' : quiet ? 'var(--warn)' : 'var(--ok)';
+      $('#tu-level').textContent = `${v.label} ${v.total.toFixed(1)} ${v.unit}　峰值 ${f.peakDb.toFixed(0)} dBFS${over ? '　過載：太大聲，數字不準' : quiet ? '　太小聲' : ''}`;
+      const peak = Math.max(...Array.from(v.values).filter((x) => x > -199), ...(st.live.hold ?? []), -200);
+      const top = Math.ceil((peak + 8) / 10) * 10;
+      if (st.axisMax === null || top > st.axisMax || top < st.axisMax - 20) st.axisMax = top;
     } else { bar.style.width = '0'; $('#tu-level').textContent = ''; }
-    const rta = st.rta ? st.rta.map((p) => 10 * Math.log10(p)) : null;
-    const m = rta ? midLevel(rta) : 0;
-    drawBars($('#tu-rta'), { freqs: TUNE_F, values: rta ? rta.map((v) => v - m) : null, empty: '開啟麥克風後這裡會顯示即時頻譜' });
+    const yMax = st.axisMax ?? 0;
+    drawBars($('#tu-rta'), {
+      freqs: v?.freqs ?? THIRD_NOMINAL, values: v?.values ?? null, yMin: yMax - RTA_SPAN_DB, yMax, yStep: 10, signed: false,
+      hold: st.view.hold ? st.live.hold : null, floor: v?.floor ?? null, dim: v?.dim ?? null, empty: '開啟麥克風後這裡會顯示即時頻譜',
+    });
+    let info = RTA_HINT[st.view.time] ?? '';
+    if (st.view.time === 'leq') {
+      const err = (i) => { const [lo, hi] = iecEdges(THIRD_EXACT[i]); return randomErrorDb(hi - lo, st.live.sec); };
+      info = st.live.sec >= 1 ? `平均（Leq）：已平均 ${st.live.sec.toFixed(0)} 秒。播放粉紅噪音時，20 Hz 段的統計誤差約 ±${err(0).toFixed(1)} dB、100 Hz 段約 ±${err(7).toFixed(1)} dB，平均越久越準。` : '平均（Leq）：從按下「重設」開始一直平均。';
+    }
+    if (st.ambient && v) info += '虛線是量到的背景噪音。';
+    if (st.view.paused) info += '（已暫停）';
+    $('#tu-rta-info').textContent = info;
+  }
+  function renderRta() {
+    const v = st.view;
+    el.querySelectorAll('[data-time]').forEach((b) => b.classList.toggle('active', b.dataset.time === v.time));
+    el.querySelectorAll('[data-weight]').forEach((b) => b.classList.toggle('active', b.dataset.weight === v.weight));
+    el.querySelectorAll('[data-frac]').forEach((b) => b.classList.toggle('active', Number(b.dataset.frac) === v.fraction));
+    $('#tu-hold').classList.toggle('active', v.hold);
+    $('#tu-pause').classList.toggle('active', v.paused);
+    $('#tu-pause').textContent = v.paused ? '繼續' : '暫停';
+    const off = st.cal.splOffset;
+    $('#tu-spl-status').textContent = off === null ? '音量：未校正（顯示 dBFS）。把音壓計放在手機旁邊，輸入它的讀數後按「校正音量」。' : `音量：已校正，0 dBFS = ${off.toFixed(1)} dB。`;
+    $('#tu-spl-clear').disabled = off === null;
+    $('#tu-cal-status').textContent = st.cal.mic ? `麥克風校正檔：${st.cal.mic.name}（${st.cal.mic.points.length} 點）。` : '麥克風校正檔：沒有。外接量測麥克風（例如 miniDSP UMIK、Dayton iMM-6C）附的校正檔可以在這裡載入。';
+    $('#tu-cal-clear').disabled = !st.cal.mic;
   }
   let liveRaf = false;
   function scheduleLive() {
@@ -441,6 +611,7 @@ export function init(ctx, el) {
       if (plan.before < 1) parts.push('已經很接近目標，不用再套用。');
       if (plan.strength < 1) { parts.push('Q 值還沒驗證，套用只做一半的修正。'); cls = 'warn'; }
       if (plan.maxBoost > 0.5) parts.push(`有頻段提升到 ${signed(plan.maxBoost)} dB，開很大聲時注意破音。`);
+      if (plan.maxHz) parts.push(`麥克風在 ${fmtHz(plan.maxHz)}Hz 以上收不到聲音，這些頻段不修正。`);
       const chs = channelsOf(g);
       if (chs.length > 1 && chs.some((ch) => eqSignature(store, ch) !== eqSignature(store, chs[0]))) parts.push(`CH${chs.join('、CH')} 目前的 EQ 不一樣，計算以 CH${chs[0]} 為準，套用後會一樣。`);
       text = parts.join('');
@@ -456,7 +627,7 @@ export function init(ctx, el) {
     }).join('');
   }
   function renderAll() {
-    renderButtons(); renderTask(); renderMic(); renderLive(); renderQ(); renderMeasure(); renderPlan();
+    renderButtons(); renderTask(); renderMic(); renderRta(); renderLive(); renderQ(); renderMeasure(); renderPlan();
     $('#tu-bass').value = String(st.target.bassDb); $('#tu-treble').value = String(st.target.trebleDb);
   }
 
@@ -464,6 +635,23 @@ export function init(ctx, el) {
   $('#tu-mic').addEventListener('click', openMic);
   $('#tu-mic-off').addEventListener('click', closeMic);
   $('#tu-wav').addEventListener('click', downloadWav);
+  el.querySelectorAll('[data-time]').forEach((b) => b.addEventListener('click', () => setView({ time: b.dataset.time })));
+  el.querySelectorAll('[data-weight]').forEach((b) => b.addEventListener('click', () => setView({ weight: b.dataset.weight })));
+  el.querySelectorAll('[data-frac]').forEach((b) => b.addEventListener('click', () => setView({ fraction: Number(b.dataset.frac) })));
+  $('#tu-hold').addEventListener('click', () => setView({ hold: !st.view.hold }));
+  $('#tu-pause').addEventListener('click', () => setView({ paused: !st.view.paused }));
+  $('#tu-rta-reset').addEventListener('click', () => { resetRta(); renderLive(); });
+  $('#tu-rta-log').addEventListener('click', logRta);
+  $('#tu-spl-set').addEventListener('click', () => { if (setSplOffset($('#tu-spl').value === '' ? NaN : Number($('#tu-spl').value))) toast('已校正'); });
+  $('#tu-spl-clear').addEventListener('click', () => setSplOffset(null));
+  $('#tu-calfile-pick').addEventListener('click', () => $('#tu-calfile').click());
+  $('#tu-calfile').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try { if (loadCalText(file.name, await file.text())) toast('校正檔已載入'); } catch (err) { toast(`讀不到檔案：${errText(err)}`); }
+  });
+  $('#tu-cal-clear').addEventListener('click', () => { setMicCal(null); saveCal(); logger.info('RTA：移除麥克風校正檔'); });
   $('#tu-qtest').addEventListener('click', () => qTest());
   $('#tu-qmode').addEventListener('click', () => {
     storage.put('settings', 'eqQMode', '1').catch(() => {});
@@ -501,10 +689,15 @@ export function init(ctx, el) {
       st.qMode = (await storage.get('settings', 'eqQMode')) ?? st.qMode;
       const q = await storage.get('settings', 'tuneQ'); if (q?.verdict === 'qrate' || q?.verdict === 'one') st.q = q;
       const t = await storage.get('settings', 'tuneTarget'); if (Number.isFinite(t?.bassDb) && Number.isFinite(t?.trebleDb)) st.target = t;
+      const v = await storage.get('settings', 'tuneView');
+      if (v && v.time in TIME_LETTER && ['Z', 'A', 'C'].includes(v.weight) && [1, 3].includes(v.fraction)) Object.assign(st.view, { time: v.time, weight: v.weight, fraction: v.fraction, hold: Boolean(v.hold) });
+      const c = await storage.get('settings', 'tuneCal');
+      if (Number.isFinite(c?.splOffset)) st.cal.splOffset = c.splOffset;
+      if (c?.mic?.points?.length >= 5) st.cal.mic = { name: String(c.mic.name), points: c.mic.points, corr: calAtBands(c.mic.points) };
     } catch { /* defaults */ }
     renderAll();
   })();
 
-  ctx.tune = { state: st, openMic, closeMic, measure, qTest, apply, undo, planFor, exportText, pasteText, select: (g) => { st.group = g; renderAll(); } };
+  ctx.tune = { state: st, openMic, closeMic, measure, qTest, apply, undo, planFor, exportText, pasteText, rtaView, setView, resetRta, logRta, setSplOffset, loadCalText, select: (g) => { st.group = g; renderAll(); } };
   renderAll();
 }

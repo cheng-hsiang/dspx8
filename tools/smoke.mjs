@@ -173,7 +173,26 @@ const SCRIPT_D = `(async () => {
   out.tuneMicLog = window.dspx.logger.entries.some((e) => e.text.startsWith('麥克風支援'));
   out.tuneUntested = (document.querySelector('#tu-untested')?.textContent || '').includes('未測試') && (document.querySelector('#page-help').textContent || '').includes('還沒在真車上測試過');
   document.querySelector('#tu-mic').click();
-  out.tuneFrames = await until(() => t.state.latest && t.state.rta, 3000);
+  out.tuneFrames = await until(() => t.state.latest && t.state.shown, 3000);
+  // analyser display: weightings, octave view, peak hold, log line, calibration
+  const v0 = t.rtaView();
+  out.rtaDefault = Boolean(v0) && v0.label === 'LZS' && v0.values.length === 31 && v0.unit === 'dBFS' && document.querySelector('[data-time="slow"]').classList.contains('active');
+  document.querySelector('[data-time="leq"]').click();
+  document.querySelector('[data-weight="A"]').click();
+  document.querySelector('[data-frac="1"]').click();
+  document.querySelector('#tu-hold').click();
+  await sleep(500);
+  const v1 = t.rtaView();
+  out.rtaView = v1.label === 'LAeq' && v1.values.length === 10 && v1.freqs[5] === 1000 && Boolean(t.state.live.hold) && t.state.live.hold.length === 10 && document.querySelector('[data-weight="A"]').classList.contains('active');
+  out.rtaReadout = (document.querySelector('#tu-level').textContent || '').startsWith('LAeq ') && (document.querySelector('#tu-rta-info').textContent || '').includes('Leq');
+  out.rtaLogged = t.logRta() && window.dspx.logger.entries.some((e) => e.text.startsWith('RTA LAeq（1/1 倍頻'));
+  out.rtaSpl = t.setSplOffset(85) && Math.abs(t.rtaView().total - 85) < 0.5 && t.rtaView().unit === 'dB';
+  t.setSplOffset(null);
+  out.rtaCal = t.loadCalText('test.txt', '20 -6\\n100 -6\\n1000 0\\n10000 0\\n20000 0') && t.state.cal.mic.corr[0] === -6 && (document.querySelector('#tu-cal-status').textContent || '').includes('test.txt');
+  document.querySelector('#tu-cal-clear').click();
+  out.rtaCalCleared = t.state.cal.mic === null;
+  out.rtaStandards = (document.querySelector('#page-tune').textContent || '').includes('IEC 61260-1');
+  t.setView({ time: 'slow', weight: 'Z', fraction: 3, hold: false });
   const q = await t.qTest({ confirm: false });
   out.tuneQ = q ? q.verdict : null;
   out.tuneQRestored = regs[eqAddr(1, 18, 'G')] === 500 && regs[eqAddr(1, 18, 'Q')] === 240 && [1, 2, 3, 4].every((ch) => regs[ADDR.muteOfChannel(ch)] === 0);
@@ -217,6 +236,11 @@ const SCRIPT_E = `(async () => {
   out.micError = t.state.micError;
   out.micFrames = await until(() => t.state.latest && Array.from(t.state.latest.bands).every(Number.isFinite), 5000);
   out.micLogged = window.dspx.logger.entries.some((e) => e.text.startsWith('麥克風已開啟'));
+  out.micCapture = t.state.info ? t.state.info.capture : null;
+  out.micWeighted = Array.from(t.state.latest.fast).every(Number.isFinite) && Array.from(t.state.latest.slow).every(Number.isFinite) && t.state.latest.sec > 0.05;
+  out.micChecked = await until(() => window.dspx.logger.entries.some((e) => e.text.startsWith('麥克風檢查')), 6000);
+  out.micCheckText = (window.dspx.logger.entries.find((e) => e.text.startsWith('麥克風檢查')) || {}).text || '';
+  out.micOpenText = (window.dspx.logger.entries.find((e) => e.text.startsWith('麥克風已開啟')) || {}).text || '';
   t.select('all');
   await t.measure();
   out.micMeasured = t.state.runs.all.length === 1;
@@ -300,6 +324,10 @@ try {
     await sleep(300);
     const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
     await writeFile(join(ROOT, '.smoke', 'tune.png'), Buffer.from(shot.data, 'base64'));
+    await cdp.evaluate(`window.dspx.tune.setView({ hold: true }); document.querySelector('#tu-mic').scrollIntoView(); true`);
+    await sleep(1500);
+    const rta = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    await writeFile(join(ROOT, '.smoke', 'rta.png'), Buffer.from(rta.data, 'base64'));
   } catch (err) { console.warn('tune screenshot failed', err.message); }
   await cdp.send('Page.navigate', { url: `http://localhost:${PORT}/?sim=1&mic=1&tuneSec=1` });
   await sleep(1500);
@@ -323,12 +351,12 @@ try {
     delayStepped: result.delayStepped, inputWritten: result.inputWritten, tabsOnTop: result.tabsOnTop,
     otherLayerWarned: result.otherLayerWarned, otherLayerZeroed: result.otherLayerZeroed, presetZeroesOther: result.presetZeroesOther,
     slowMasterAligned: result.slowMasterAligned, slowDelayStep: result.slowDelayStep,
-    tuneDump: result.tuneDump, tuneMicLog: result.tuneMicLog, tuneUntested: result.tuneUntested, tuneFrames: result.tuneFrames, tuneQ: result.tuneQ === 'qrate', tuneQRestored: result.tuneQRestored,
+    tuneDump: result.tuneDump, tuneMicLog: result.tuneMicLog, tuneUntested: result.tuneUntested, tuneFrames: result.tuneFrames, rtaDefault: result.rtaDefault, rtaView: result.rtaView, rtaReadout: result.rtaReadout, rtaLogged: result.rtaLogged, rtaSpl: result.rtaSpl, rtaCal: result.rtaCal, rtaCalCleared: result.rtaCalCleared, rtaStandards: result.rtaStandards, tuneQ: result.tuneQ === 'qrate', tuneQRestored: result.tuneQRestored,
     tuneFrontMeasured: result.tuneFrontBefore > 1.5 && result.tuneFrontStrength === 1, tuneApplied: result.tuneApplied, tuneRegsWritten: result.tuneRegsWritten,
     tuneFrontImproved: result.tuneFrontAfter < 0.8 && result.tuneFrontAfter < 0.4 * result.tuneFrontBefore,
     tuneRearTrim: result.tuneRearTrim < -2, tuneRearHfCutOnly: result.tuneRearHfCutOnly, tuneRearApplied: result.tuneRearApplied && result.tuneRearChanged,
     tuneUndone: result.tuneUndone, tunePaste: result.tunePaste, tuneLogs: result.tuneLogs, tuneMutesRestored: result.tuneMutesRestored,
-    micOpened: result.micOpened, micFrames: result.micFrames, micLogged: result.micLogged, micMeasured: result.micMeasured, micClosed: result.micClosed,
+    micOpened: result.micOpened, micFrames: result.micFrames, micLogged: result.micLogged, micCapture: result.micCapture === 'AudioWorklet', micWeighted: result.micWeighted, micChecked: result.micChecked && result.micCheckText.startsWith('麥克風檢查：峰值'), micMeasured: result.micMeasured, micClosed: result.micClosed,
     modeSwitched: result.modeSwitched, modeActive2: result.modeActive2, modeEqFlat: result.modeEqFlat,
     modeUnsavedTracked: result.unsavedBefore > 0 && result.unsavedAfter === 0, modeSaved: result.modeSaved, slotSaved: result.slotSaved,
   };
