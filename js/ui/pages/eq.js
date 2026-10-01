@@ -178,7 +178,7 @@ export function init(ctx, el) {
     renderPresetDesc();
   }
   function currentPreset() { const v = $('#eq-preset').value || ''; const [k, name] = [v.slice(0, 1), v.slice(2)]; return (k === 'b' ? st.bundled : st.local).find((p) => p.name === name) ?? null; }
-  function renderPresetDesc() { const p = currentPreset(); $('#eq-preset-desc').textContent = p ? `${p.description ?? ''}${p.levelDb ? `　後聲道建議比前聲道 ${p.levelDb.rear} dB（聲音頁手動調）。` : ''}${p.sub ? `　重低音本體：低通 ${p.sub.lpfHz} Hz，增益${p.sub.gain}，相位${p.sub.phase}。` : ''}` : ''; }
+  function renderPresetDesc() { const p = currentPreset(); $('#eq-preset-desc').textContent = p ? `${p.description ?? ''}${p.notes?.length ? `　${p.notes.join('')}` : ''}${p.sub ? `　有主動式重低音的話，本體建議：低通 ${p.sub.lpfHz} Hz，增益${p.sub.gain}，相位${p.sub.phase}。` : ''}` : ''; }
   /** The layer not being edited still runs; a curve left there (e.g. the 10-band layer from an older session) stacks onto this one. */
   const otherHits = () => nonFlatBands(store, otherLayer(st.layer), Array.from(new Set(Object.values(st.groups).flatMap((g) => g.channels))));
   function renderOther() {

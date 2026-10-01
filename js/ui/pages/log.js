@@ -13,7 +13,7 @@ async function copyText(el, text) {
   toast('無法自動複製，請長按文字框選擇「複製」', 4000);
 }
 
-async function shareText(text) {
+export async function shareText(text) {
   if (!navigator.share) { toast('此瀏覽器不支援分享'); return; }
   try {
     const file = new File([text], 'dspx8s-log.txt', { type: 'text/plain' });
@@ -27,6 +27,7 @@ export function init(ctx, el) {
   el.innerHTML = `
     <h2>日誌</h2>
     <div class="card">
+      <p style="margin:0 0 10px">遇到問題時，按「複製全部」，把內容貼給開發者，並說明你做了什麼、發生什麼事。</p>
       <div class="row">
         <button id="log-copy" class="primary">複製全部</button>
         <button id="log-copy-report">複製報告摘要</button>

@@ -65,6 +65,9 @@ const SCRIPT = `(async () => {
   out.helpSections = document.querySelectorAll('#page-help details').length;
   out.helpSteps = document.querySelectorAll('#page-help .steps.big li').length;
   out.tabsFit = document.querySelector('#tabs').scrollWidth <= document.querySelector('#tabs').clientWidth;
+  const rep = window.dspx.help.reportText();
+  out.helpReport = Boolean(document.querySelector('#help-report #help-copy-log')) && rep.startsWith('【DSP-X8s 調音網頁 問題回報】') && rep.includes('問題描述：') && rep.includes('啟動');
+  out.logHint = (document.querySelector('#page-log').textContent || '').includes('貼給開發者');
   document.querySelector('#bt-connect').click();
   out.connected = await until(() => (document.querySelector('#bt-status').textContent || '').includes('客戶代碼 4006'));
   out.dumpDone = await until(() => (document.querySelector('#bt-progress-text').textContent || '').startsWith('完成'));
@@ -105,7 +108,8 @@ const SCRIPT = `(async () => {
   // EQ page: bundled presets load, preset apply writes both front channels, nudge writes through the throttle, verify leaves no mismatch
   document.querySelector('[data-tab="eq"]').click();
   out.eqCanvas = Boolean(document.querySelector('#eq-curve'));
-  out.eqPresetsLoaded = await until(() => window.dspx.eq && window.dspx.eq.state.bundled.length === 4, 8000);
+  out.eqPresetsLoaded = await until(() => window.dspx.eq && window.dspx.eq.state.bundled.length === 14, 8000);
+  out.eqPresetOptions = document.querySelectorAll('#eq-preset option').length;
   out.eqPresetApplied = await window.dspx.eq.loadPreset('02 K-pop / J-pop', { confirm: false });
   const { eqAddr } = await import('./js/protocol/addrmap.js');
   out.eqBandCh1 = window.dspx.store.get(eqAddr(1, 5, 'G'));
@@ -225,7 +229,7 @@ const SCRIPT_C = `(async () => {
   document.querySelector('#bt-connect').click();
   out.slowDump = await until(() => (document.querySelector('#bt-progress-text').textContent || '').startsWith('完成'), 60000);
   document.querySelector('[data-tab="eq"]').click();
-  await until(() => window.dspx.eq && window.dspx.eq.state.bundled.length === 4, 8000);
+  await until(() => window.dspx.eq && window.dspx.eq.state.bundled.length === 14, 8000);
   const { eqAddr } = await import('./js/protocol/addrmap.js');
   const canvas = document.querySelector('#eq-curve');
   const r = canvas.getBoundingClientRect();
@@ -301,7 +305,7 @@ try {
     .map((e) => e.method === 'Runtime.exceptionThrown' ? e.params.exceptionDetails.exception?.description ?? e.params.exceptionDetails.text : e.params.args.map((a) => a.value ?? a.description).join(' '));
   const checks = {
     tabs7: result.tabs === 7, pages7: result.pages === 7,
-    helpFirst: result.helpFirst, helpAdvice: result.helpAdvice, helpUrlClean: /^http:\/\/localhost:\d+\/$/.test(result.helpUrl), helpSections: result.helpSections >= 10, helpSteps: result.helpSteps === 3, tabsFit: result.tabsFit, booted: result.booted, connected: result.connected, dumpDone: result.dumpDone,
+    helpFirst: result.helpFirst, helpAdvice: result.helpAdvice, helpUrlClean: /^http:\/\/localhost:\d+\/$/.test(result.helpUrl), helpSections: result.helpSections >= 10, helpSteps: result.helpSteps === 3, tabsFit: result.tabsFit, helpReport: result.helpReport, logHint: result.logHint, eqPresetOptions: result.eqPresetOptions === 14, booted: result.booted, connected: result.connected, dumpDone: result.dumpDone,
     allConfirmed: result.confirmed === 1613, writeTest: result.writeTest, reportOk: result.reportOk, logHasLines: result.logLines > 10,
     volInitial60: result.volInitial === '60', volWritten: result.volWritten, muteWritten: result.muteWritten, modeActive1: result.modeActive === '1',
     snapshotSaved: result.snapshots >= 1, noConsoleErrors: errors.length === 0,

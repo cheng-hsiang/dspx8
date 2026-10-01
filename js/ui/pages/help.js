@@ -1,8 +1,10 @@
 import { browserAdvice, shareUrl, BLUEFY_URL } from '../../help/advice.js';
+import { buildIssueReport, CONTACT } from '../../help/issue-report.js';
+import { shareText } from './log.js';
 import { toast } from '../components/dialog.js';
 
 export function init(ctx, el) {
-  const { env, transportKind } = ctx;
+  const { env, transportKind, logger, device } = ctx;
   const advice = browserAdvice(env, { sim: transportKind === 'sim' });
   const url = shareUrl();
   const open = (p) => (advice.platform === p ? ' open' : '');
@@ -29,12 +31,12 @@ export function init(ctx, el) {
 
     <div class="card"><h3>不會調？照這樣做</h3>
       <ol class="steps">
-        <li>到「EQ」分頁，下面的「預設」選一個喜歡的風格。</li>
+        <li>到「EQ」分頁，下面的「預設」選一個風格。內建十多組：流行、搖滾、電音、爵士、古典、人聲、重低音等。</li>
         <li>按「載入預設」，聽聽看。不喜歡就換一個。</li>
         <li>想自己改：在曲線上按住圓點上下拖，往上是加強，往下是減少。</li>
         <li>滿意後到「模式」分頁按「儲存」，留一份備份。</li>
       </ol>
-      <p class="muted" style="margin:8px 0 0">調壞了也不用怕：EQ 頁按「重置本組增益」就回到平的。</p>
+      <p class="muted" style="margin:8px 0 0">調壞了也不用怕：預設選「平直（全部歸零）」再載入，就回到沒有 EQ 的狀態。</p>
     </div>
 
     <div class="card">
@@ -71,7 +73,7 @@ export function init(ctx, el) {
           <li><b>EQ</b>：調音色。可以拉曲線，也可以直接載入預設。</li>
           <li><b>自動調音</b>：用手機麥克風量車內的聲音，自動算出 EQ。新功能，還在測試。</li>
           <li><b>模式</b>：8 個儲存槽，可以存不同的音色再切換。</li>
-          <li><b>日誌</b>：記錄送給機器的每一筆指令。出問題時按「複製全部」傳給作者。</li>
+          <li><b>日誌</b>：記錄送給機器的每一筆指令。出問題時複製下來傳給開發者。</li>
         </ul>
       </details>
       <details><summary>調好的設定會不會不見</summary>
@@ -100,6 +102,18 @@ export function init(ctx, el) {
       </details>
     </div>
 
+    <div class="card" id="help-report"><h3>遇到問題怎麼辦</h3>
+      <p style="margin:0 0 6px">連不上、調了沒反應、畫面怪怪的，都請把<b>日誌</b>傳給開發者。日誌記錄了網頁和機器之間的每一步，開發者看了才知道哪裡出錯。</p>
+      <ol class="steps">
+        <li>出問題後<b>先不要重新整理網頁</b>。</li>
+        <li>按下面的「複製問題回報」。</li>
+        <li>貼給開發者（把這個網頁分享給你的人），並在「問題描述」那一行寫上你做了什麼、發生什麼事。</li>
+      </ol>
+      <div class="row" style="margin-top:8px"><button id="help-copy-log" class="primary">複製問題回報</button><button id="help-share-log">用分享傳送</button></div>
+      <textarea id="help-report-text" class="copyfallback" hidden readonly style="height:120px;margin-top:8px"></textarea>
+      <p class="muted" style="margin:8px 0 0">日誌只有連線紀錄和調整的數值，沒有個人資料。已經重新整理了也沒關係：到「日誌」分頁按「載入上次日誌」再按「複製全部」。會用 GitHub 的人也可以直接<a href="${CONTACT.issuesUrl}" target="_blank" rel="noopener">開一個 Issue</a>貼上。${CONTACT.note}</p>
+    </div>
+
     <div class="card"><h3>常見問題</h3>
       <details><summary>清單裡找不到 Mango3.0</summary>
         <ul class="plain">
@@ -123,10 +137,11 @@ export function init(ctx, el) {
       </details>
       <details><summary>聲音變得很怪，想回到原本</summary>
         <ul class="plain">
-          <li>EQ 分頁按「重置本組增益」，前、後兩組都按一次，就回到平的。</li>
+          <li>EQ 分頁的「預設」選最後一個「平直（全部歸零）」再按「載入預設」，就回到沒有 EQ 的狀態。</li>
           <li>有存過模式的話，到「模式」分頁切回去。</li>
         </ul>
       </details>
+      <p class="muted" style="margin:10px 0 0">這裡找不到答案：請照上面「遇到問題怎麼辦」把日誌傳給開發者。</p>
     </div>
 
     <div class="card"><h3>分享給車友</h3>
@@ -140,6 +155,17 @@ export function init(ctx, el) {
     try { await navigator.clipboard.writeText(url); toast('網址已複製'); }
     catch { toast('無法自動複製，請長按上面的網址選「複製」', 4000); }
   }
+  const reportText = () => buildIssueReport({
+    version: document.documentElement.dataset.version, userAgent: env.userAgent,
+    deviceName: device.info?.name, logText: logger.toText('normal'),
+  });
+  $('#help-copy-log').addEventListener('click', async () => {
+    const text = reportText();
+    try { await navigator.clipboard.writeText(text); toast('已複製。到 LINE 或訊息裡貼上，傳給開發者', 4000); }
+    catch { const ta = $('#help-report-text'); ta.hidden = false; ta.value = text; ta.focus(); ta.select(); toast('無法自動複製，請長按下面的文字框選「全選」再「複製」', 5000); }
+  });
+  $('#help-share-log').addEventListener('click', () => shareText(reportText()));
+  ctx.help = { reportText };
   $('#help-copy').addEventListener('click', copy);
   $('#help-share').addEventListener('click', async () => {
     if (!navigator.share) { copy(); return; }

@@ -1,0 +1,10 @@
+{
+  "schema": "dspx8s-preset/1",
+  "name": "平直（全部歸零）",
+  "description": "所有頻段回到 0 dB，等於沒有 EQ。想從頭開始調，或想聽喇叭原本的聲音時用。",
+  "channelGroups": { "front": [1, 2], "rear": [3, 4] },
+  "eq": {
+    "front": [],
+    "rear": []
+  }
+}
