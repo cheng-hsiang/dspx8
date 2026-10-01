@@ -168,6 +168,7 @@ const SCRIPT_D = `(async () => {
   const { eqAddr, ADDR } = await import('./js/protocol/addrmap.js');
   const { encodeGain } = await import('./js/protocol/codec.js');
   out.tuneMicLog = window.dspx.logger.entries.some((e) => e.text.startsWith('麥克風支援'));
+  out.tuneUntested = (document.querySelector('#tu-untested')?.textContent || '').includes('未測試') && (document.querySelector('#page-help').textContent || '').includes('還沒在真車上測試過');
   document.querySelector('#tu-mic').click();
   out.tuneFrames = await until(() => t.state.latest && t.state.rta, 3000);
   const q = await t.qTest({ confirm: false });
@@ -319,7 +320,7 @@ try {
     delayStepped: result.delayStepped, inputWritten: result.inputWritten, tabsOnTop: result.tabsOnTop,
     otherLayerWarned: result.otherLayerWarned, otherLayerZeroed: result.otherLayerZeroed, presetZeroesOther: result.presetZeroesOther,
     slowMasterAligned: result.slowMasterAligned, slowDelayStep: result.slowDelayStep,
-    tuneDump: result.tuneDump, tuneMicLog: result.tuneMicLog, tuneFrames: result.tuneFrames, tuneQ: result.tuneQ === 'qrate', tuneQRestored: result.tuneQRestored,
+    tuneDump: result.tuneDump, tuneMicLog: result.tuneMicLog, tuneUntested: result.tuneUntested, tuneFrames: result.tuneFrames, tuneQ: result.tuneQ === 'qrate', tuneQRestored: result.tuneQRestored,
     tuneFrontMeasured: result.tuneFrontBefore > 1.5 && result.tuneFrontStrength === 1, tuneApplied: result.tuneApplied, tuneRegsWritten: result.tuneRegsWritten,
     tuneFrontImproved: result.tuneFrontAfter < 0.8 && result.tuneFrontAfter < 0.4 * result.tuneFrontBefore,
     tuneRearTrim: result.tuneRearTrim < -2, tuneRearHfCutOnly: result.tuneRearHfCutOnly, tuneRearApplied: result.tuneRearApplied && result.tuneRearChanged,

@@ -35,7 +35,8 @@ export function init(ctx, el) {
   };
 
   el.innerHTML = `
-    <h2>自動調音</h2>
+    <h2>自動調音 <span class="tag warn">未測試</span></h2>
+    <div class="banner warn" id="tu-untested"><b>未測試：</b>這個功能還沒在真車上測試過，算出來的結果不一定正確。想試的話請先把音量轉小；套用後覺得不對，按「還原上次套用」就能回復。試過的結果歡迎回報給開發者。</div>
     <div class="card">
       <p style="margin:0 0 8px">用手機麥克風量車內的聲音，算出 31 段 EQ 的建議值。結果是合理的起點，最後還是用耳朵微調。</p>
       <ol class="steps">
@@ -276,7 +277,7 @@ export function init(ctx, el) {
       plan.strength < 1 ? 'Q 值還沒驗證，這次只套用一半的修正。' : '',
       appFlattened ? `10 段層有 ${appFlattened} 個頻段不是 0 dB，會一起歸零。` : '',
       skipped.length ? `有 ${skipped.length} 個頻段機器未啟用，會略過。` : '',
-      '套用後可以按「還原上次套用」回復。',
+      '提醒：自動調音還沒在真車上測試過，請先把音量轉小。套用後可以按「還原上次套用」回復。',
     ].filter(Boolean).join('\n');
     if (confirm && !(await confirmDialog(msg, { okText: '套用' }))) return false;
     const snapshot = pairs.map((p) => ({ addr: p.addr, val: store.get(p.addr) }));
