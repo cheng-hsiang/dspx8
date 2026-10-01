@@ -2,6 +2,10 @@
 
 **直接使用：<https://cheng-hsiang.github.io/dspx8/>**
 
+![Yiye lang DSP-X8s 機器外觀](images/dsp-x8s.jpg)
+
+適用機型：Yiye lang DSP-X8s（機身印有 DSP-X8s，原廠微信小程序是 ONE-APP）。
+
 - iPhone 請用 [Bluefy](https://apps.apple.com/app/bluefy-web-ble-browser/id1492822055) 開啟，Android 用 Chrome。打開後第一個分頁就是使用說明。
 - 沒有機器也想先看看：<https://cheng-hsiang.github.io/dspx8/?sim=1>（模擬模式，不會連到真的機器）。
 
